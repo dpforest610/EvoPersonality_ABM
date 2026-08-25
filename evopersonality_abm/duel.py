@@ -18,6 +18,12 @@ def main():
     agent_b = Agent("B", always_defect)
     run_duel(agent_a, agent_b, rounds=10)
 
+    print(f"{'round':>5}  {agent_a.name:>3}  {agent_b.name:>3}")
+    for i, (move_a, move_b) in enumerate(
+        zip(agent_a.history_self, agent_b.history_self), start=1
+    ):
+        print(f"{i:>5}  {move_a:>3}  {move_b:>3}")
+
     for agent in (agent_a, agent_b):
         moves = "".join(agent.history_self)
         print(f"{agent.name}: score={agent.score}, moves={moves}")
