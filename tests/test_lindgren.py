@@ -10,6 +10,7 @@ from evopersonality_abm.lindgren import (
     always_defect_table,
     duplicate_memory,
     pavlov_table,
+    point_mutate,
     tit_for_tat_table,
 )
 from evopersonality_abm.strategies import always_cooperate, always_defect, tit_for_tat
@@ -187,3 +188,76 @@ def test_repeated_duplication_stays_neutral_across_several_generations():
     run_duel(b, Agent("opp", always_defect), rounds=20)
 
     assert b.history_self == a.history_self
+
+
+# --- Point mutation: flip one table entry, must stay local ---
+
+
+@pytest.mark.parametrize(
+    "make_table",
+    [tit_for_tat_table, always_cooperate_table, always_defect_table, pavlov_table],
+)
+def test_point_mutate_flips_only_the_targeted_table_entry(make_table):
+    original = make_table()
+    for index in range(len(original.table)):
+        mutated = point_mutate(original, index)
+
+        assert mutated.memory_depth == original.memory_depth
+        assert mutated.prehistory == original.prehistory
+        for i, (old_bit, new_bit) in enumerate(zip(original.table, mutated.table)):
+            if i == index:
+                assert new_bit == 1 - old_bit
+            else:
+                assert new_bit == old_bit
+
+
+def test_point_mutate_changes_decision_only_for_the_history_it_encodes():
+    original = tit_for_tat_table()
+    # index=1 -> own last move D (bit 0), opponent last move C (bit 1).
+    mutated = point_mutate(original, index=1)
+
+    # Exhaustively cover every own/opp history of length 0..4, as with the
+    # duplication check: a table is a pure lookup, so "only that history
+    # changes" must hold everywhere, not just on the histories a demo duel
+    # happens to reach.
+    changed_at_least_one = False
+    for length in range(5):
+        for own_bits in itertools.product("CD", repeat=length):
+            for opp_bits in itertools.product("CD", repeat=length):
+                own_history, opp_history = list(own_bits), list(opp_bits)
+                targeted = original._table_index(own_history, opp_history) == 1
+                mutated_move = mutated.decide(own_history, opp_history)
+                original_move = original.decide(own_history, opp_history)
+                if targeted:
+                    assert mutated_move != original_move
+                    changed_at_least_one = True
+                else:
+                    assert mutated_move == original_move
+    assert changed_at_least_one
+
+
+def test_point_mutated_tft_diverges_only_where_the_flipped_entry_applies():
+    original = tit_for_tat_table()
+    mutated_index = 1  # own last move D, opponent last move C
+    mutated = point_mutate(original, mutated_index)
+
+    pattern = ["C", "D", "C", "C", "D"]
+
+    def scripted_opponent(own_history, opp_history):
+        return pattern[len(own_history)]
+
+    a = Agent("orig", original.as_strategy())
+    b = Agent("mut", mutated.as_strategy())
+    run_duel(a, Agent("opp", scripted_opponent), rounds=len(pattern))
+    run_duel(b, Agent("opp", scripted_opponent), rounds=len(pattern))
+
+    assert a.history_self != b.history_self  # the mutation does show up in play
+
+    first_diff = next(
+        i for i in range(len(pattern)) if a.history_self[i] != b.history_self[i]
+    )
+    assert a.history_self[:first_diff] == b.history_self[:first_diff]
+    # confirm the divergence happens exactly where the flipped entry applies
+    own_before = a.history_self[:first_diff]
+    opp_before = pattern[:first_diff]
+    assert original._table_index(own_before, opp_before) == mutated_index

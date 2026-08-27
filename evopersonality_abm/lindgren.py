@@ -9,11 +9,16 @@ A strategy of memory depth m is encoded as:
     real history exists.
 
 This module fixes the lookup-table mechanics for a given, static genome,
-and provides the gene-duplication mutation that grows memory depth m by
-one round (`duplicate_memory`). Duplication is behaviorally neutral: the
-resulting depth-(m+1) table makes exactly the same decisions as the
-depth-m table it was built from, for any actual play. Split mutation
-(the reverse, shrinking m) is a later step.
+and provides two mutation operators on it:
+  - `duplicate_memory` grows memory depth m by one round. It is
+    behaviorally neutral: the resulting depth-(m+1) table makes exactly
+    the same decisions as the depth-m table it was built from, for any
+    actual play.
+  - `point_mutate` flips a single table entry at a fixed memory depth. It
+    is *not* neutral: it changes the action for exactly the one history
+    condition that entry encodes, leaving every other entry (and hence
+    every other history) untouched.
+Split mutation (the reverse of duplication, shrinking m) is a later step.
 """
 
 from typing import Callable, List, Sequence, Tuple
@@ -115,6 +120,20 @@ def duplicate_memory(table: LindgrenTable) -> LindgrenTable:
         [0] + list(table.prehistory[:m]) + [0] + list(table.prehistory[m:])
     )
     return LindgrenTable(memory_depth=new_m, table=new_table, prehistory=new_prehistory)
+
+
+def point_mutate(table: LindgrenTable, index: int) -> LindgrenTable:
+    """Point mutation: flip the table entry for one history condition.
+
+    Unlike `duplicate_memory`, this is not neutral -- the entry at
+    `index` (a joint own/opp history, encoded as in `_table_index`) picks
+    the opposite action, while every other entry is untouched.
+    """
+    new_table = list(table.table)
+    new_table[index] ^= 1
+    return LindgrenTable(
+        memory_depth=table.memory_depth, table=new_table, prehistory=table.prehistory
+    )
 
 
 def tit_for_tat_table() -> LindgrenTable:
