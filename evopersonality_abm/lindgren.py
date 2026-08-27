@@ -8,9 +8,12 @@ A strategy of memory depth m is encoded as:
     before round 1, used to look up the first m decisions before any
     real history exists.
 
-This module only fixes the lookup-table mechanics for a given, static
-genome. Duplication/split mutation of the table (memory depth evolving)
-is a later step.
+This module fixes the lookup-table mechanics for a given, static genome,
+and provides the gene-duplication mutation that grows memory depth m by
+one round (`duplicate_memory`). Duplication is behaviorally neutral: the
+resulting depth-(m+1) table makes exactly the same decisions as the
+depth-m table it was built from, for any actual play. Split mutation
+(the reverse, shrinking m) is a later step.
 """
 
 from typing import Callable, List, Sequence, Tuple
@@ -80,6 +83,38 @@ class LindgrenTable:
 
     def as_strategy(self) -> Callable[[List[Action], List[Action]], Action]:
         return lambda own_history, opp_history: self.decide(own_history, opp_history)
+
+
+def duplicate_memory(table: LindgrenTable) -> LindgrenTable:
+    """Gene-duplication mutation: memory_depth -> memory_depth + 1.
+
+    Neutral by construction. The new table is indexed by one extra
+    (own, opponent) round tacked onto the *old* end of the history window
+    (own_bits/opp_bits are oldest-to-newest, so the new bits land at the
+    most-significant end of each half of the index, per _table_index).
+    Every entry that shares the same trailing m own-bits/opp-bits as an
+    old entry copies that old entry's value, regardless of the two new
+    leading bits -- so the extra round of memory is carried but never
+    consulted, and decisions are unchanged for any real play. The two new
+    prehistory bits are consulted only through that same ignored position,
+    so their value cannot affect behavior either; they are set to 0.
+    """
+    m = table.memory_depth
+    new_m = m + 1
+    mask_m = (1 << m) - 1
+
+    new_table: List[Bit] = [0] * (2 ** (2 * new_m))
+    for idx in range(len(new_table)):
+        idx2 = idx & ((1 << (2 * m + 1)) - 1)  # drop the leading own-extra bit
+        own_last_m = idx2 >> (m + 1)
+        opp_last_m = idx2 & mask_m  # drop the opp-extra bit in between
+        old_index = (own_last_m << m) | opp_last_m
+        new_table[idx] = table.table[old_index]
+
+    new_prehistory = (
+        [0] + list(table.prehistory[:m]) + [0] + list(table.prehistory[m:])
+    )
+    return LindgrenTable(memory_depth=new_m, table=new_table, prehistory=new_prehistory)
 
 
 def tit_for_tat_table() -> LindgrenTable:
