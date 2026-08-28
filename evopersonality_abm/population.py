@@ -20,7 +20,7 @@ from typing import List, Optional, Sequence
 
 from .agent import Agent
 from .duel import run_duel
-from .lindgren import LindgrenTable, duplicate_memory, point_mutate
+from .lindgren import LindgrenTable, duplicate_memory, point_mutate, split_memory
 
 
 def random_table(memory_depth: int, rng: random.Random) -> LindgrenTable:
@@ -73,16 +73,22 @@ def mutate_individual(
     point_mutation_rate: float,
     duplication_rate: float,
     max_memory_depth: int,
+    split_rate: float = 0.0,
+    min_memory_depth: int = 0,
 ) -> LindgrenTable:
-    """Apply at most one duplication and one point mutation to an offspring.
+    """Apply at most one memory-depth mutation and one point mutation.
 
-    Duplication is tried first (Lindgren's mechanism: memory grows
-    neutrally, then point mutation can act on the newly duplicated,
-    previously-unconsulted bits). `max_memory_depth` caps table size,
-    which is exponential in memory depth.
+    Duplication (grow) and split (shrink, its exact inverse -- see
+    `lindgren.split_memory`) are mutually exclusive per offspring per
+    generation: duplication is tried first, and split is only tried if
+    duplication didn't fire. `max_memory_depth`/`min_memory_depth` cap
+    how far depth can wander (table size is exponential in depth, so an
+    unbounded max is not computationally safe).
     """
     if table.memory_depth < max_memory_depth and rng.random() < duplication_rate:
         table = duplicate_memory(table)
+    elif table.memory_depth > min_memory_depth and rng.random() < split_rate:
+        table = split_memory(table)
     if rng.random() < point_mutation_rate:
         index = rng.randrange(len(table.table))
         table = point_mutate(table, index)
@@ -123,13 +129,17 @@ def run_evolution(
     initial_memory_depth: int = 1,
     point_mutation_rate: float = 0.05,
     duplication_rate: float = 0.02,
+    split_rate: float = 0.0,
     max_memory_depth: int = 6,
+    min_memory_depth: int = 0,
     seed: Optional[int] = None,
 ) -> List[GenerationStats]:
     """Run the population loop and return per-generation summary stats.
 
     Each generation: round-robin tournament -> record stats -> select
-    next generation proportional to payoff -> mutate offspring.
+    next generation proportional to payoff -> mutate offspring. With
+    `split_rate` > 0, memory depth can shrink as well as grow, so it need
+    not simply ratchet up to `max_memory_depth` and stay there.
     """
     rng = random.Random(seed)
     tables = [random_table(initial_memory_depth, rng) for _ in range(population_size)]
@@ -143,7 +153,13 @@ def run_evolution(
         tables = select_and_reproduce(tables, payoffs, rng)
         tables = [
             mutate_individual(
-                t, rng, point_mutation_rate, duplication_rate, max_memory_depth
+                t,
+                rng,
+                point_mutation_rate,
+                duplication_rate,
+                max_memory_depth,
+                split_rate=split_rate,
+                min_memory_depth=min_memory_depth,
             )
             for t in tables
         ]

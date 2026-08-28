@@ -11,6 +11,7 @@ from evopersonality_abm.lindgren import (
     duplicate_memory,
     pavlov_table,
     point_mutate,
+    split_memory,
     tit_for_tat_table,
 )
 from evopersonality_abm.strategies import always_cooperate, always_defect, tit_for_tat
@@ -188,6 +189,76 @@ def test_repeated_duplication_stays_neutral_across_several_generations():
     run_duel(b, Agent("opp", always_defect), rounds=20)
 
     assert b.history_self == a.history_self
+
+
+# --- Split mutation: memory depth m -> m-1, exact inverse of duplication ---
+
+
+def test_split_memory_rejects_depth_zero():
+    depth0 = LindgrenTable(memory_depth=0, table=[0], prehistory=[])
+    with pytest.raises(ValueError):
+        split_memory(depth0)
+
+
+def test_split_memory_shrinks_depth_by_one():
+    depth0 = split_memory(tit_for_tat_table())
+    assert depth0.memory_depth == 0
+    assert len(depth0.table) == 1
+    assert len(depth0.prehistory) == 0
+
+
+@pytest.mark.parametrize(
+    "make_table",
+    [tit_for_tat_table, always_cooperate_table, always_defect_table, pavlov_table],
+)
+def test_split_undoes_duplicate_exactly(make_table):
+    original = make_table()
+    round_tripped = split_memory(duplicate_memory(original))
+
+    assert round_tripped.memory_depth == original.memory_depth
+    assert round_tripped.table == original.table
+    assert round_tripped.prehistory == original.prehistory
+
+
+@pytest.mark.parametrize(
+    "make_table",
+    [tit_for_tat_table, always_cooperate_table, always_defect_table, pavlov_table],
+)
+def test_split_then_duplicate_then_split_is_stable(make_table):
+    # Once memory has been split back down, re-duplicating and splitting
+    # again should keep reproducing the same (now depth-m) table -- the
+    # round-trip identity holds at any depth, not just the original one.
+    once = split_memory(duplicate_memory(make_table()))
+    twice = split_memory(duplicate_memory(once))
+    assert twice.memory_depth == once.memory_depth
+    assert twice.table == once.table
+    assert twice.prehistory == once.prehistory
+
+
+def test_split_memory_keeps_the_forgotten_dd_quadrant_when_quadrants_diverge():
+    # Build a depth-1 table by hand where the two "quadrants" a
+    # subsequent duplicate_memory would create diverge only through a
+    # later point mutation -- split_memory must recover exactly the
+    # entries reachable by assuming the forgotten round was (D, D).
+    depth2 = duplicate_memory(tit_for_tat_table())
+    # Flip an entry that is NOT in the (own_extra=0, opp_extra=0)
+    # quadrant, i.e. index >= len(depth2.table) // 4 with a leading 1 bit
+    # in either half; pick one explicitly by construction instead of
+    # searching, using the same indexing scheme as duplicate_memory/
+    # split_memory (own bits then opp bits, oldest-to-newest, MSB first).
+    m = 1  # original depth before duplication
+    own_extra, opp_extra = 1, 0
+    own_last_m, opp_last_m = 0, 1
+    diverging_index = (
+        (own_extra << m) | own_last_m
+    ) << (m + 1) | ((opp_extra << m) | opp_last_m)
+    mutated = point_mutate(depth2, diverging_index)
+
+    recovered = split_memory(mutated)
+    # The (0,0) quadrant was untouched by the mutation, so splitting
+    # still reproduces the pre-duplication table exactly.
+    assert recovered.table == tit_for_tat_table().table
+    assert recovered.prehistory == tit_for_tat_table().prehistory
 
 
 # --- Point mutation: flip one table entry, must stay local ---

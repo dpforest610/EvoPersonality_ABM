@@ -28,7 +28,9 @@ def parse_args():
     p.add_argument("--initial-memory-depth", type=int, default=1)
     p.add_argument("--point-mutation-rate", type=float, default=0.05)
     p.add_argument("--duplication-rate", type=float, default=0.02)
+    p.add_argument("--split-rate", type=float, default=0.02)
     p.add_argument("--max-memory-depth", type=int, default=6)
+    p.add_argument("--min-memory-depth", type=int, default=0)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument(
         "--out", type=str, default="scripts/output/memory_depth_evolution.png"
@@ -112,7 +114,9 @@ def main():
         initial_memory_depth=args.initial_memory_depth,
         point_mutation_rate=args.point_mutation_rate,
         duplication_rate=args.duplication_rate,
+        split_rate=args.split_rate,
         max_memory_depth=args.max_memory_depth,
+        min_memory_depth=args.min_memory_depth,
         seed=args.seed,
     )
     print_table(stats)

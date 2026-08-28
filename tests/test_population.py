@@ -3,6 +3,7 @@ import random
 from evopersonality_abm.lindgren import (
     always_cooperate_table,
     always_defect_table,
+    duplicate_memory,
     tit_for_tat_table,
 )
 from evopersonality_abm.population import (
@@ -96,9 +97,9 @@ def test_run_evolution_produces_one_stats_entry_per_generation_with_full_populat
         assert s.min_depth <= s.mean_depth <= s.max_depth
 
 
-def test_run_evolution_depth_never_shrinks_without_split_mutation():
-    # Split mutation (depth-shrinking) doesn't exist yet, so no individual
-    # can ever have a smaller memory depth than the initial population.
+def test_run_evolution_depth_never_shrinks_when_split_rate_is_zero():
+    # split_rate defaults to 0.0, so with it left off no individual can
+    # ever have a smaller memory depth than the initial population.
     stats = run_evolution(
         population_size=20,
         generations=15,
@@ -108,6 +109,69 @@ def test_run_evolution_depth_never_shrinks_without_split_mutation():
         seed=7,
     )
     assert all(min(s.memory_depths) >= 1 for s in stats)
+
+
+def test_mutate_individual_split_shrinks_depth_by_one():
+    rng = random.Random(5)
+    table = duplicate_memory(tit_for_tat_table())  # depth 2
+    mutated = mutate_individual(
+        table,
+        rng,
+        point_mutation_rate=0.0,
+        duplication_rate=0.0,
+        split_rate=1.0,
+        max_memory_depth=5,
+        min_memory_depth=0,
+    )
+    assert mutated.memory_depth == 1
+
+
+def test_mutate_individual_respects_min_memory_depth_floor():
+    rng = random.Random(6)
+    table = tit_for_tat_table()  # depth 1
+    mutated = mutate_individual(
+        table,
+        rng,
+        point_mutation_rate=0.0,
+        duplication_rate=0.0,
+        split_rate=1.0,
+        max_memory_depth=5,
+        min_memory_depth=1,  # already at the floor
+    )
+    assert mutated.memory_depth == 1
+
+
+def test_mutate_individual_duplication_and_split_are_mutually_exclusive():
+    # With both rates at 1.0, duplication (tried first) always wins --
+    # depth grows, it never nets out to a no-op or a shrink.
+    rng = random.Random(8)
+    table = tit_for_tat_table()  # depth 1
+    mutated = mutate_individual(
+        table,
+        rng,
+        point_mutation_rate=0.0,
+        duplication_rate=1.0,
+        split_rate=1.0,
+        max_memory_depth=5,
+        min_memory_depth=0,
+    )
+    assert mutated.memory_depth == 2
+
+
+def test_run_evolution_with_split_can_shrink_below_initial_depth():
+    stats = run_evolution(
+        population_size=20,
+        generations=25,
+        rounds_per_duel=10,
+        initial_memory_depth=3,
+        point_mutation_rate=0.05,
+        duplication_rate=0.0,
+        split_rate=0.3,
+        max_memory_depth=5,
+        min_memory_depth=0,
+        seed=9,
+    )
+    assert any(min(s.memory_depths) < 3 for s in stats)
 
 
 def test_run_evolution_is_deterministic_given_a_seed():

@@ -18,7 +18,13 @@ and provides two mutation operators on it:
     is *not* neutral: it changes the action for exactly the one history
     condition that entry encodes, leaving every other entry (and hence
     every other history) untouched.
-Split mutation (the reverse of duplication, shrinking m) is a later step.
+  - `split_memory` shrinks memory depth m by one round: the reverse of
+    `duplicate_memory`. It keeps only the sub-table for the oldest
+    remembered round being (own=D, opp=D) and discards the rest, so
+    `split_memory(duplicate_memory(t)) == t` exactly for any table t, but
+    applied to a table whose quadrants have since diverged via point
+    mutation it is lossy -- shrinking forgets whatever the discarded
+    quadrants encoded.
 """
 
 from typing import Callable, List, Sequence, Tuple
@@ -119,6 +125,39 @@ def duplicate_memory(table: LindgrenTable) -> LindgrenTable:
     new_prehistory = (
         [0] + list(table.prehistory[:m]) + [0] + list(table.prehistory[m:])
     )
+    return LindgrenTable(memory_depth=new_m, table=new_table, prehistory=new_prehistory)
+
+
+def split_memory(table: LindgrenTable) -> LindgrenTable:
+    """Gene-deletion mutation: memory_depth -> memory_depth - 1.
+
+    The reverse of `duplicate_memory`. For each entry of the new,
+    depth-(m-1) table, look up the old depth-m table assuming the
+    now-forgotten oldest round was (own=D, opp=D) -- i.e. keep the
+    table.table quadrant where both new leading bits are 0, and drop the
+    corresponding leading prehistory bit from each channel.
+
+    Right after a `duplicate_memory` call (before any point mutation),
+    all four quadrants of the grown table are identical copies of the
+    original, so this exactly undoes it. On a table that has since
+    diverged, the discarded quadrants' information is simply lost --
+    unlike duplication (neutral) and point mutation (local), shrinking
+    memory is a lossy, forgetful operation in general.
+    """
+    m = table.memory_depth
+    if m < 1:
+        raise ValueError("memory_depth must be >= 1 to split")
+    new_m = m - 1
+    mask_new_m = (1 << new_m) - 1
+
+    new_table: List[Bit] = [0] * (2 ** (2 * new_m))
+    for new_index in range(len(new_table)):
+        own_last = new_index >> new_m
+        opp_last = new_index & mask_new_m
+        old_index = (own_last << m) | opp_last
+        new_table[new_index] = table.table[old_index]
+
+    new_prehistory = list(table.prehistory[1:m]) + list(table.prehistory[m + 1 :])
     return LindgrenTable(memory_depth=new_m, table=new_table, prehistory=new_prehistory)
 
 
