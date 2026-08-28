@@ -159,6 +159,12 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--seeds", type=int, default=10, help="number of seeds, seed-offset..seed-offset+seeds-1")
     p.add_argument("--seed-offset", type=int, default=0)
+    p.add_argument(
+        "--seed-list",
+        type=str,
+        default=None,
+        help="comma-separated explicit seeds, e.g. '2,3,4,7,8' -- overrides --seeds/--seed-offset",
+    )
     p.add_argument("--population-size", type=int, default=100)
     p.add_argument("--generations", type=int, default=1000)
     p.add_argument("--rounds-per-duel", type=int, default=50)
@@ -175,7 +181,10 @@ def main():
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    seeds = list(range(args.seed_offset, args.seed_offset + args.seeds))
+    if args.seed_list is not None:
+        seeds = [int(s) for s in args.seed_list.split(",") if s.strip() != ""]
+    else:
+        seeds = list(range(args.seed_offset, args.seed_offset + args.seeds))
     all_rows: List[Tuple[int, List[Row]]] = []
 
     with ProcessPoolExecutor(max_workers=args.workers) as ex:
