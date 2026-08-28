@@ -1,4 +1,4 @@
 __pycache__/
 *.pyc
 .pytest_cache/
-scripts/output/
+scripts/output/*.png

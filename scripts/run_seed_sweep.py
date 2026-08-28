@@ -11,12 +11,15 @@ default) a comparison plot with all seeds' trajectories overlaid.
 
 import argparse
 import csv
+import subprocess
 import sys
+import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Sequence, Tuple
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
 
 from evopersonality_abm.population import run_evolution
 
@@ -65,6 +68,47 @@ def detect_transition(rows: List[Row]) -> Optional[int]:
         if all(p >= COOP_THRESHOLD for p in payoffs[i:]):
             return rows[i][0]
     return None
+
+
+def _git(*args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", *args], cwd=REPO_ROOT, capture_output=True, text=True
+    )
+
+
+def commit_and_push(paths: Sequence[Path], message: str) -> None:
+    """Commit the given paths and push, retrying push on transient failure.
+
+    Called once per seed as its result lands, so each seed's CSV is
+    durably on the remote branch even if the overall sweep is
+    interrupted (container reclaimed, session ended) before it finishes.
+    """
+    add = _git("add", *[str(p) for p in paths])
+    if add.returncode != 0:
+        print(f"git add failed for {message}: {add.stderr.strip()}", flush=True)
+        return
+
+    commit = _git("commit", "-m", message)
+    if commit.returncode != 0:
+        if "nothing to commit" in (commit.stdout + commit.stderr):
+            return
+        print(f"git commit failed for {message}: {commit.stderr.strip()}", flush=True)
+        return
+
+    delay = 2
+    for attempt in range(4):
+        push = _git("push")
+        if push.returncode == 0:
+            print(f"pushed: {message}", flush=True)
+            return
+        print(
+            f"git push failed (attempt {attempt + 1}) for {message}: "
+            f"{push.stderr.strip()}",
+            flush=True,
+        )
+        time.sleep(delay)
+        delay *= 2
+    print(f"git push ultimately failed for: {message}", flush=True)
 
 
 def write_csv(path: Path, rows: List[Row]) -> None:
@@ -152,7 +196,8 @@ def main():
         }
         for fut in as_completed(futures):
             seed, rows = fut.result()
-            write_csv(out_dir / f"seed_{seed}.csv", rows)
+            csv_path = out_dir / f"seed_{seed}.csv"
+            write_csv(csv_path, rows)
             all_rows.append((seed, rows))
 
             final_payoff = rows[-1][5]
@@ -162,6 +207,11 @@ def main():
                 f"seed={seed} done: final_payoff={final_payoff:.3f} "
                 f"regime={final_regime} transition_gen={transition_gen}",
                 flush=True,
+            )
+            commit_and_push(
+                [csv_path],
+                f"Seed sweep: seed={seed} result "
+                f"(regime={final_regime}, transition_gen={transition_gen})",
             )
 
     all_rows.sort(key=lambda t: t[0])
@@ -174,6 +224,7 @@ def main():
             final_regime = "cooperation" if final_payoff >= COOP_THRESHOLD else "defection"
             transition_gen = detect_transition(rows)
             w.writerow([seed, f"{final_payoff:.4f}", final_regime, transition_gen if transition_gen is not None else ""])
+    commit_and_push([summary_path], "Seed sweep: final summary")
 
     print("\n=== summary ===")
     print(f"{'seed':>4} {'final_payoff':>12} {'regime':>11} {'transition_gen':>14}")
@@ -187,7 +238,9 @@ def main():
     print(f"\n{n_coop}/{len(all_rows)} seeds ended in cooperation")
 
     if not args.no_plot:
-        plot_sweep(all_rows, out_dir / "seed_sweep_comparison.png")
+        plot_path = out_dir / "seed_sweep_comparison.png"
+        plot_sweep(all_rows, plot_path)
+        commit_and_push([plot_path], "Seed sweep: comparison plot")
 
 
 if __name__ == "__main__":
