@@ -12,6 +12,8 @@ Usage:
 """
 
 import argparse
+import csv
+import statistics
 import sys
 from pathlib import Path
 
@@ -46,7 +48,50 @@ def parse_args():
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--out", type=str, default="scripts/output/coupling_evolution.png")
     p.add_argument("--no-plot", action="store_true")
+    p.add_argument(
+        "--csv-dir",
+        type=str,
+        default=None,
+        help="if set, write timeseries.csv (per-generation summary) and "
+        "snapshot_gen<N>.csv (per-agent K_out/K_self/depth) for the first "
+        "and last generation into this directory",
+    )
     return p.parse_args()
+
+
+def write_csvs(stats, csv_dir: Path) -> None:
+    csv_dir.mkdir(parents=True, exist_ok=True)
+
+    timeseries_path = csv_dir / "timeseries.csv"
+    with open(timeseries_path, "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(
+            ["generation", "mean_k_out", "std_k_out", "mean_k_self", "std_k_self", "mean_depth", "mean_payoff"]
+        )
+        for s in stats:
+            w.writerow(
+                [
+                    s.generation,
+                    f"{s.mean_k_out:.6f}",
+                    f"{statistics.pstdev(s.k_out):.6f}",
+                    f"{s.mean_k_self:.6f}",
+                    f"{statistics.pstdev(s.k_self):.6f}",
+                    f"{statistics.fmean(s.memory_depths):.4f}",
+                    f"{s.mean_payoff:.6f}",
+                ]
+            )
+    print(f"saved timeseries to {timeseries_path}")
+
+    for snap in (stats[0], stats[-1]):
+        snap_path = csv_dir / f"snapshot_gen{snap.generation}.csv"
+        with open(snap_path, "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["agent_index", "k_out", "k_self", "memory_depth"])
+            for i, (k_out, k_self, depth) in enumerate(
+                zip(snap.k_out, snap.k_self, snap.memory_depths)
+            ):
+                w.writerow([i, f"{k_out:.6f}", f"{k_self:.6f}", depth])
+        print(f"saved snapshot to {snap_path}")
 
 
 def print_table(stats):
@@ -144,6 +189,9 @@ def main():
         seed=args.seed,
     )
     print_table(stats)
+
+    if args.csv_dir is not None:
+        write_csvs(stats, Path(args.csv_dir))
 
     if not args.no_plot:
         plot(stats, Path(args.out))
