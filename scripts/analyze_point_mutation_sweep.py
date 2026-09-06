@@ -250,7 +250,7 @@ def main():
         q1s = [agg[(rate, channel_name)]["q1"] for rate in levels]
         q3s = [agg[(rate, channel_name)]["q3"] for rate in levels]
         lo_err = [m - q for m, q in zip(medians, q1s)]
-        hi_err = [q - m for m, q in zip(q3s, medians)]
+        hi_err = [q - m for q, m in zip(q3s, medians)]
         tr = trend_results[channel_name]
         ax.errorbar(
             levels, medians, yerr=[lo_err, hi_err],
