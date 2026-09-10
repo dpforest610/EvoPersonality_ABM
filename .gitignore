@@ -5,3 +5,4 @@ scripts/output/*.png
 scripts/output/point_mutation_sweep_smoke/
 scripts/output/point_mutation_sweep_analysis_smoke/
 scripts/output/*_run.log
+scripts/output/selection_vs_drift_sweep_smoke/
