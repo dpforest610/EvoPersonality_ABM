@@ -6,3 +6,5 @@ scripts/output/point_mutation_sweep_smoke/
 scripts/output/point_mutation_sweep_analysis_smoke/
 scripts/output/*_run.log
 scripts/output/selection_vs_drift_sweep_smoke/
+scripts/output/selection_vs_drift_sweep_with_depth_smoke/
+scripts/output/selection_partial_correlation_smoke/
