@@ -25,14 +25,19 @@ files per seed:
                                    sanity check: same seed + same
                                    params should reproduce it exactly).
   seed_<n>_individual_log.csv  -- generation, agent_index, k_out,
-                                   k_self, payoff -- one row per agent,
-                                   logged every --log-interval
-                                   generations (default 100) across the
-                                   whole run (so both the transient and
-                                   the gen>=2000 steady state are
-                                   covered; the steady state gets the
-                                   most snapshots since it's most of the
-                                   run).
+                                   k_self, memory_depth, payoff -- one
+                                   row per agent, logged every
+                                   --log-interval generations (default
+                                   100) across the whole run (so both
+                                   the transient and the gen>=2000
+                                   steady state are covered; the steady
+                                   state gets the most snapshots since
+                                   it's most of the run). memory_depth
+                                   is included so a later analysis can
+                                   check whether a K-payoff correlation
+                                   survives controlling for the
+                                   co-evolving Lindgren table's depth
+                                   (a possible confound).
 
 Resumable: skips any seed whose BOTH files already exist. Checkpointed
 git commit+push every --checkpoint-every (default 10) cumulative
@@ -61,8 +66,8 @@ from evopersonality_abm.coupling import run_coupled_evolution
 
 # gen, mean_k_out, std_k_out, mean_k_self, std_k_self, mean_depth, mean_payoff
 AggRow = Tuple[int, float, float, float, float, float, float]
-# gen, agent_index, k_out, k_self, payoff
-IndividualRow = Tuple[int, int, float, float, float]
+# gen, agent_index, k_out, k_self, memory_depth, payoff
+IndividualRow = Tuple[int, int, float, float, int, float]
 
 
 def run_one_seed(
@@ -108,7 +113,9 @@ def run_one_seed(
     for s in stats:
         if s.generation % log_interval == 0:
             for i in range(len(s.k_out)):
-                individual_rows.append((s.generation, i, s.k_out[i], s.k_self[i], s.payoffs[i]))
+                individual_rows.append(
+                    (s.generation, i, s.k_out[i], s.k_self[i], s.memory_depths[i], s.payoffs[i])
+                )
     return seed, agg_rows, individual_rows
 
 
@@ -123,9 +130,9 @@ def write_agg_csv(path: Path, rows: List[AggRow]) -> None:
 def write_individual_csv(path: Path, rows: List[IndividualRow]) -> None:
     with open(path, "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["generation", "agent_index", "k_out", "k_self", "payoff"])
-        for gen, idx, k_out, k_self, payoff in rows:
-            w.writerow([gen, idx, f"{k_out:.6f}", f"{k_self:.6f}", f"{payoff:.6f}"])
+        w.writerow(["generation", "agent_index", "k_out", "k_self", "memory_depth", "payoff"])
+        for gen, idx, k_out, k_self, depth, payoff in rows:
+            w.writerow([gen, idx, f"{k_out:.6f}", f"{k_self:.6f}", depth, f"{payoff:.6f}"])
 
 
 def _git(*args: str) -> subprocess.CompletedProcess:
@@ -157,7 +164,7 @@ def commit_and_push(paths: List[Path], message: str) -> None:
 
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--out-dir", type=str, default="scripts/output/selection_vs_drift_sweep")
+    p.add_argument("--out-dir", type=str, default="scripts/output/selection_vs_drift_sweep_with_depth")
     p.add_argument("--total-seeds", type=int, default=50)
     p.add_argument("--checkpoint-every", type=int, default=10)
     p.add_argument("--population-size", type=int, default=100)
