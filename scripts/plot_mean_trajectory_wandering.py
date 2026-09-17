@@ -1,30 +1,42 @@
 """Visualize the OU-theta asymmetry (K_out theta=0.0093 < K_self
 theta=0.0153, from analyze_ou_fit_diagnostic.py) as a shape, not a
 number: does each seed's population-mean (K_out, K_self) trajectory
-actually wander farther along K_out than along K_self?
+actually wander farther along K_out than along K_self? And in the same
+45-degree-rotated coordinates used for the point-cloud diagnostics
+(sum=K_out+K_self, difference=K_self-K_out): does the "squarish" raw
+wander turn into a rectangle that's long along sum and short along
+difference, i.e. does rotating onto the two generative axes make the
+asymmetry read straight off the plot's own horizontal/vertical extent
+instead of an eyeballed tilt?
 
 For each of the 50 seeds, plots the line connecting (mean_K_out(t),
 mean_K_self(t)) for every generation t >= 2000 (the steady-state
-region), all 50 seeds overlaid at low alpha on the same (K_out, K_self)
-axes. Uses the per-generation AGGREGATE timeseries
+region), all 50 seeds overlaid at low alpha, in two coordinate systems:
+
+    raw:      x=mean_K_out,                    y=mean_K_self
+    rotated:  x=mean_K_out+mean_K_self (sum),  y=mean_K_self-mean_K_out (difference)
+
+Uses the per-generation AGGREGATE timeseries
 (scripts/output/selection_vs_drift_sweep_with_depth/seed_<n>_timeseries.csv,
 already saved every generation, not just the individual log's
 every-100-gen snapshots) for a smooth, fully-resolved trajectory rather
 than only the ~30 sparse points the individual log would give -- pure
 re-analysis either way, no new simulation.
 
-Equal aspect ratio is used deliberately: on unequal axes, an
-anisotropic wander shape can look however you scale it, so equal
-aspect is the only way this plot's shape actually shows the real
-K_out-vs-K_self asymmetry rather than an axis-scaling artifact.
+Equal aspect ratio is used deliberately in both panels: on unequal
+axes, an anisotropic wander shape can look however you scale it, so
+equal aspect is the only way either plot's shape actually shows the
+real asymmetry rather than an axis-scaling artifact.
 
-Alongside the plot, reports each seed's per-axis wander (std and
-range of its own gen>=2000 trajectory) and the OU-theory prediction
-for their ratio (stationary variance ~ sigma^2 / (2*theta)) as a
-numeric cross-check on whatever the picture shows.
+Alongside the plots, reports each seed's per-axis wander (std and
+range of its own gen>=2000 trajectory, in both coordinate systems) and
+the OU-theory prediction for the raw ratio (stationary variance ~
+sigma^2 / (2*theta)) as a numeric cross-check on whatever the picture
+shows.
 
 Outputs:
-    scripts/output/mean_trajectory_wandering/trajectory_wandering.png
+    scripts/output/mean_trajectory_wandering/trajectory_wandering_raw.png
+    scripts/output/mean_trajectory_wandering/trajectory_wandering_rotated.png
     scripts/output/mean_trajectory_wandering/wander_stats_by_seed.csv
 
 Usage:
@@ -71,14 +83,20 @@ def main():
 
     rows = []
     trajectories = {}
+    rotated_trajectories = {}
     for seed in SEEDS:
         gens, kout, kself = load_trajectory(seed, GEN_MIN)
         trajectories[seed] = (kout, kself)
+        sum_ = kout + kself
+        diff_ = kself - kout
+        rotated_trajectories[seed] = (sum_, diff_)
         rows.append(
             {
                 "seed": seed,
                 "kout_std": kout.std(ddof=1), "kout_range": kout.max() - kout.min(),
                 "kself_std": kself.std(ddof=1), "kself_range": kself.max() - kself.min(),
+                "sum_std": sum_.std(ddof=1), "sum_range": sum_.max() - sum_.min(),
+                "diff_std": diff_.std(ddof=1), "diff_range": diff_.max() - diff_.min(),
             }
         )
 
@@ -115,7 +133,23 @@ def main():
     print(f"\nOU-theory prediction (stationary var ~ sigma^2/(2*theta), theta/sigma from the pre-existing OU fit):")
     print(f"  predicted K_out/K_self std ratio = {predicted_std_ratio:.3f}   (observed: {ratio_std:.3f})")
 
-    # --- plot ---
+    sum_stds = np.array([r["sum_std"] for r in rows])
+    diff_stds = np.array([r["diff_std"] for r in rows])
+    sum_ranges = np.array([r["sum_range"] for r in rows])
+    diff_ranges = np.array([r["diff_range"] for r in rows])
+    print(f"\n=== Rotated (sum, difference) coordinates ===")
+    print(f"sum (K_out+K_self):        std median={np.median(sum_stds):.4f} IQR=[{np.percentile(sum_stds,25):.4f},{np.percentile(sum_stds,75):.4f}]   "
+          f"range median={np.median(sum_ranges):.4f}")
+    print(f"difference (K_self-K_out): std median={np.median(diff_stds):.4f} IQR=[{np.percentile(diff_stds,25):.4f},{np.percentile(diff_stds,75):.4f}]   "
+          f"range median={np.median(diff_ranges):.4f}")
+    ratio_rot_std = np.median(sum_stds) / np.median(diff_stds)
+    print(f"sum / difference ratio: std={ratio_rot_std:.3f}  range={np.median(sum_ranges)/np.median(diff_ranges):.3f}")
+    stat_rot, p_rot = wilcoxon(sum_stds, diff_stds)
+    n_sum_bigger = int((sum_stds > diff_stds).sum())
+    print(f"paired Wilcoxon (per seed, sum std vs difference std): stat={stat_rot:.1f} p={p_rot:.4f}  "
+          f"({n_sum_bigger}/{len(SEEDS)} seeds have sum std > difference std)")
+
+    # --- plots ---
     import matplotlib
 
     matplotlib.use("Agg")
@@ -134,9 +168,27 @@ def main():
                  f"(equal aspect -- shape here is the real wander, not an axis-scaling artifact)")
     ax.spines[["top", "right"]].set_visible(False)
     fig.tight_layout()
-    fig_path = OUT_DIR / "trajectory_wandering.png"
+    fig_path = OUT_DIR / "trajectory_wandering_raw.png"
     fig.savefig(fig_path, dpi=150, bbox_inches="tight")
     print(f"\nsaved {fig_path}")
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    for seed in SEEDS:
+        sum_, diff_ = rotated_trajectories[seed]
+        ax.plot(sum_, diff_, color=TRAJ_COLOR, linewidth=0.6, alpha=0.25)
+    ax.set_xlim(-0.05, 2.05)
+    ax.set_ylim(-1.05, 1.05)
+    ax.set_aspect("equal")
+    ax.axhline(0, color=MUTED_INK, linewidth=0.6, linestyle=":")
+    ax.set_xlabel("mean K_out + mean K_self (sum)")
+    ax.set_ylabel("mean K_self - mean K_out (difference)")
+    ax.set_title(f"Same trajectories, rotated 45°: sum vs. difference, gen>={GEN_MIN}, all {len(SEEDS)} seeds\n"
+                 f"(equal aspect; sum/difference std ratio = {ratio_rot_std:.2f})")
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    fig_path = OUT_DIR / "trajectory_wandering_rotated.png"
+    fig.savefig(fig_path, dpi=150, bbox_inches="tight")
+    print(f"saved {fig_path}")
 
 
 if __name__ == "__main__":
