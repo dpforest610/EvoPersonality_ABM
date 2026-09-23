@@ -26,21 +26,9 @@ visible in the same frame as the centroid's much smaller wander, so the
 two readings ("centroid barely moves, near center" / "population stays
 spread across a wide single basin") can't be mistaken for each other.
 
-Second panel: a paired violin of the 50 seeds' own mean K_out vs mean
-K_self at that generation (from the aggregate timeseries CSV, same
-values used by plot_mean_trajectory_wandering.py), with thin lines
-connecting each seed's paired (K_out, K_self) point, plus a paired
-Wilcoxon signed-rank test on the 50 (mean_K_self - mean_K_out)
-differences -- statistic, p-value, and the median difference -- so the
-question "are K_out and K_self different at this generation" has an
-actual number attached to it, not just a visual impression. Seeds
-(n=50), not raw individuals (n=5000), are the test's unit -- consistent
-with every other statistical test in this project, since agents within
-one seed aren't independent replicates for a population-level question.
-
-Pure re-analysis of the already-saved individual logs and aggregate
-timeseries (scripts/output/selection_vs_drift_sweep_with_depth/) -- no
-new simulation.
+Pure re-analysis of the already-saved individual logs
+(scripts/output/selection_vs_drift_sweep_with_depth/seed_<n>_individual_log.csv)
+-- no new simulation.
 
 Usage:
     python3 scripts/animate_centroid_trajectory.py --last-frame-only   # gen=4900 still only
@@ -88,16 +76,6 @@ def load_all_generations(seed: int):
             g = by_gen[gen]
             g["k_out"].append(float(row["k_out"]))
             g["k_self"].append(float(row["k_self"]))
-    return by_gen
-
-
-def load_seed_means(seed: int):
-    """Per-generation (mean_k_out, mean_k_self) from the aggregate timeseries CSV."""
-    path = SWEEP_DIR / f"seed_{seed}_timeseries.csv"
-    by_gen = {}
-    with open(path) as f:
-        for row in csv.DictReader(f):
-            by_gen[int(row["generation"])] = (float(row["mean_k_out"]), float(row["mean_k_self"]))
     return by_gen
 
 
@@ -151,37 +129,18 @@ def main():
     args = parse_args()
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    from scipy.stats import wilcoxon
-
-    print("Loading all 50 seeds' individual logs and aggregate timeseries...")
+    print("Loading all 50 seeds' individual logs...")
     per_seed_by_gen = {seed: load_all_generations(seed) for seed in SEEDS}
-    seed_means_by_gen = {seed: load_seed_means(seed) for seed in SEEDS}
     generations = sorted(next(iter(per_seed_by_gen.values())).keys())
     print(f"{len(generations)} generations: {generations[0]}..{generations[-1]}")
 
     centroid_kout, centroid_kself = [], []
     spread_by_gen = {}
-    # per-generation: 50 seed-mean K_out values, 50 seed-mean K_self values (paired by seed),
-    # plus the paired Wilcoxon test on their differences
-    paired_by_gen = {}
     for gen in generations:
         kout, kself, mean_cov = spread_at(per_seed_by_gen, gen)
         centroid_kout.append(np.mean(kout))
         centroid_kself.append(np.mean(kself))
         spread_by_gen[gen] = (kout, kself, mean_cov)
-
-        seed_kout = np.array([seed_means_by_gen[seed][gen][0] for seed in SEEDS])
-        seed_kself = np.array([seed_means_by_gen[seed][gen][1] for seed in SEEDS])
-        diffs = seed_kself - seed_kout
-        if np.allclose(diffs, 0):
-            stat, pval = np.nan, 1.0
-        else:
-            stat, pval = wilcoxon(seed_kself, seed_kout)
-        paired_by_gen[gen] = (seed_kout, seed_kself, stat, pval, np.median(diffs))
-
-    print(f"paired Wilcoxon (K_self vs K_out, n=50 seed means) at gen={generations[-1]}: "
-          f"stat={paired_by_gen[generations[-1]][2]:.1f} p={paired_by_gen[generations[-1]][3]:.4f} "
-          f"median diff={paired_by_gen[generations[-1]][4]:+.3f}")
 
     ellipse_w0, ellipse_h0, _ = ellipse_params(spread_by_gen[generations[0]][2])
     ellipse_wN, ellipse_hN, _ = ellipse_params(spread_by_gen[generations[-1]][2])
@@ -202,7 +161,7 @@ def main():
 
     from matplotlib.patches import Ellipse
 
-    def draw_trajectory_panel(ax, up_to_idx):
+    def draw(ax, up_to_idx):
         ax.clear()
         gen = generations[up_to_idx]
         kout_pts, kself_pts, mean_cov = spread_by_gen[gen]
@@ -231,51 +190,13 @@ def main():
         ax.set_aspect("equal")
         ax.set_xlabel("K_out")
         ax.set_ylabel("K_self")
-        ax.set_title(f"Centroid trajectory + spread (generation {gen})", fontsize=11)
-        ax.legend(fontsize=6.5, loc="lower left", framealpha=0.9)
+        ax.set_title(f"Population centroid trajectory + spread (generation {gen})")
+        ax.legend(fontsize=7, loc="lower left", framealpha=0.9)
         ax.spines[["top", "right"]].set_visible(False)
-
-    rng = np.random.default_rng(0)
-
-    def draw_violin_panel(ax, up_to_idx):
-        ax.clear()
-        gen = generations[up_to_idx]
-        seed_kout, seed_kself, stat, pval, med_diff = paired_by_gen[gen]
-
-        parts = ax.violinplot([seed_kout, seed_kself], positions=[0, 1], widths=0.6,
-                               showmedians=True, showextrema=False)
-        for pc, color in zip(parts["bodies"], [TRAJ_COLOR, END_COLOR]):
-            pc.set_facecolor(color)
-            pc.set_alpha(0.4)
-            pc.set_edgecolor(color)
-        parts["cmedians"].set_color(MUTED_INK)
-        parts["cmedians"].set_linewidth(2)
-
-        jitter = rng.uniform(-0.06, 0.06, size=len(SEEDS))
-        for i in range(len(SEEDS)):
-            ax.plot([0 + jitter[i], 1 + jitter[i]], [seed_kout[i], seed_kself[i]],
-                    color=MUTED_INK, linewidth=0.5, alpha=0.35, zorder=2)
-        ax.scatter(np.zeros(len(SEEDS)) + jitter, seed_kout, s=16, color=TRAJ_COLOR, alpha=0.7, zorder=3)
-        ax.scatter(np.ones(len(SEEDS)) + jitter, seed_kself, s=16, color=END_COLOR, alpha=0.7, zorder=3)
-
-        ax.set_xticks([0, 1])
-        ax.set_xticklabels(["K_out", "K_self"], fontsize=11)
-        ax.set_xlim(-0.6, 1.6)
-        ax.set_ylim(-0.02, 1.02)
-        ax.set_ylabel("mean K (per seed, n=50)")
-        p_label = "p<0.0001" if pval < 0.0001 else f"p={pval:.4f}"
-        ax.set_title(f"Paired seed means (generation {gen})\n"
-                     f"Wilcoxon signed-rank: stat={stat:.0f}, {p_label}\n"
-                     f"median(K_self−K_out)={med_diff:+.3f}", fontsize=9.5)
-        ax.spines[["top", "right"]].set_visible(False)
-
-    def draw(fig, ax_left, ax_right, up_to_idx):
-        draw_trajectory_panel(ax_left, up_to_idx)
-        draw_violin_panel(ax_right, up_to_idx)
 
     if args.last_frame_only or not args.animate:
-        fig, (ax_left, ax_right) = plt.subplots(1, 2, figsize=(13, 6.8))
-        draw(fig, ax_left, ax_right, len(generations) - 1)
+        fig, ax = plt.subplots(figsize=(7, 6.8))
+        draw(ax, len(generations) - 1)
         fig.tight_layout()
         fig_path = OUT_DIR / "animation2_centroid_trajectory_final_frame.png"
         fig.savefig(fig_path, dpi=150, bbox_inches="tight")
@@ -284,10 +205,10 @@ def main():
     if args.animate:
         from matplotlib.animation import FuncAnimation, PillowWriter
 
-        fig, (ax_left, ax_right) = plt.subplots(1, 2, figsize=(13, 6.8))
+        fig, ax = plt.subplots(figsize=(7, 6.8))
 
         def update(frame_idx):
-            draw(fig, ax_left, ax_right, frame_idx)
+            draw(ax, frame_idx)
 
         anim = FuncAnimation(fig, update, frames=len(generations), interval=1000 / args.fps, blit=False)
         gif_path = OUT_DIR / "animation2_centroid_trajectory.gif"
