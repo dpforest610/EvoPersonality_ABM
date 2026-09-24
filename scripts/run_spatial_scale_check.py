@@ -47,7 +47,7 @@ from evopersonality_abm.spatial import MOORE_OFFSETS, run_coupled_evolution_spat
 
 OUT_DIR = Path("scripts/output/spatial_scale_check_k8_condition3")
 
-SEEDS = list(range(10))
+SEEDS = list(range(50))
 GENERATIONS = 3000
 LOG_INTERVAL = 50
 
@@ -129,8 +129,18 @@ def main():
     print(f"condition (3) scale check: seeds={SEEDS}, generations={GENERATIONS}, params={PARAMS}")
     t_start = time.time()
 
+    pending_seeds = [
+        seed for seed in SEEDS
+        if not (OUT_DIR / f"seed_{seed}_timeseries.csv").exists()
+        or not (OUT_DIR / f"seed_{seed}_individual_log.csv").exists()
+    ]
+    skipped = len(SEEDS) - len(pending_seeds)
+    if skipped:
+        print(f"skipping {skipped} seed(s) whose output already exists")
+    print(f"running {len(pending_seeds)} seed(s): {pending_seeds}")
+
     with ProcessPoolExecutor(max_workers=4) as executor:
-        futures = {executor.submit(run_one_seed, seed): seed for seed in SEEDS}
+        futures = {executor.submit(run_one_seed, seed): seed for seed in pending_seeds}
         for future in as_completed(futures):
             seed, agg_rows, individual_rows, elapsed = future.result()
             write_agg_csv(OUT_DIR / f"seed_{seed}_timeseries.csv", agg_rows)
@@ -138,7 +148,7 @@ def main():
             per_gen_ms = elapsed / GENERATIONS * 1000
             print(f"seed={seed} done: {elapsed:.1f}s total, {per_gen_ms:.1f} ms/generation")
 
-    print(f"\nall {len(SEEDS)} seeds done in {time.time() - t_start:.1f}s wall-clock")
+    print(f"\nall {len(pending_seeds)} newly-run seed(s) done in {time.time() - t_start:.1f}s wall-clock")
 
 
 if __name__ == "__main__":
