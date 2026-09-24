@@ -3,6 +3,7 @@ import random
 import pytest
 
 from evopersonality_abm.spatial import (
+    MOORE_OFFSETS,
     SpatialGenerationStats,
     _mean_neighbor_payoff,
     _softmax_sample,
@@ -93,6 +94,31 @@ def test_run_coupled_evolution_spatial_smoke_static_and_mobile():
             assert all(p >= 0.0 for p in s.payoffs)
             for x, y in s.positions:
                 assert 0 <= x < 4 and 0 <= y < 4
+
+
+def test_moore_offsets_give_eight_neighbors():
+    neighbors = set(torus_neighbors((2, 2), width=5, height=5, offsets=MOORE_OFFSETS))
+    assert neighbors == {
+        (1, 1), (2, 1), (3, 1),
+        (1, 2),         (3, 2),
+        (1, 3), (2, 3), (3, 3),
+    }
+
+
+def test_run_coupled_evolution_spatial_accepts_moore_neighbor_offsets():
+    stats = run_coupled_evolution_spatial(
+        population_size=12,
+        generations=2,
+        rounds_per_duel=4,
+        n_phases=2,
+        grid_width=4,
+        grid_height=4,
+        seed=0,
+        mobile=True,
+        neighbor_offsets=MOORE_OFFSETS,
+    )
+    assert len(stats) == 2
+    assert len(stats[-1].positions) == 12
 
 
 def test_run_coupled_evolution_spatial_rejects_non_divisible_phases():

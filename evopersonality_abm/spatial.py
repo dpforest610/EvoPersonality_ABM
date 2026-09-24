@@ -39,6 +39,9 @@ from .population import select_and_reproduce
 Coord = Tuple[int, int]
 
 VON_NEUMANN_OFFSETS: Tuple[Coord, ...] = ((-1, 0), (1, 0), (0, -1), (0, 1))
+MOORE_OFFSETS: Tuple[Coord, ...] = tuple(
+    (dx, dy) for dx in (-1, 0, 1) for dy in (-1, 0, 1) if (dx, dy) != (0, 0)
+)
 
 
 def torus_neighbors(
@@ -83,13 +86,14 @@ def _mean_neighbor_payoff(
     agent_at_cell: Dict[Coord, int],
     total_payoff: List[float],
     rounds_played: List[int],
+    offsets: Sequence[Coord] = VON_NEUMANN_OFFSETS,
 ) -> float:
     """Attractiveness of `cell`: mean per-round payoff-so-far of its
     currently occupied neighbors. 0.0 (a neutral floor -- PD payoffs are
     non-negative) if none of its neighbors are occupied, or an occupied
     neighbor hasn't played a round yet this generation."""
     vals = []
-    for ncell in torus_neighbors(cell, width, height):
+    for ncell in torus_neighbors(cell, width, height, offsets):
         j = agent_at_cell.get(ncell)
         if j is not None and rounds_played[j] > 0:
             vals.append(total_payoff[j] / rounds_played[j])
@@ -121,6 +125,7 @@ def run_coupled_evolution_spatial(
     tau: float = 1.0,
     move_radius: int = 1,
     mobile: bool = True,
+    neighbor_offsets: Sequence[Coord] = VON_NEUMANN_OFFSETS,
 ) -> List[SpatialGenerationStats]:
     """Spatial version of `coupling.run_coupled_evolution`.
 
@@ -128,6 +133,9 @@ def run_coupled_evolution_spatial(
     Both run the identical phase/duel schedule -- only the movement step
     differs -- so the only variable between them is whether an agent can
     relocate (design memo point 2: keeps (2) vs (3) the clean comparison).
+
+    neighbor_offsets selects the neighborhood topology: VON_NEUMANN_OFFSETS
+    (k=4, the module default) or MOORE_OFFSETS (k=8).
 
     move_radius is currently fixed at 1 (candidates = the moving cell's
     own grid neighbors); kept as an explicit parameter rather than
@@ -157,7 +165,7 @@ def run_coupled_evolution_spatial(
         for _phase in range(n_phases):
             seen_pairs = set()
             for cell, i in list(agent_at_cell.items()):
-                for ncell in torus_neighbors(cell, grid_width, grid_height):
+                for ncell in torus_neighbors(cell, grid_width, grid_height, neighbor_offsets):
                     j = agent_at_cell.get(ncell)
                     if j is None:
                         continue
@@ -180,13 +188,14 @@ def run_coupled_evolution_spatial(
                     cell = cell_of_agent[i]
                     empty_neighbors = [
                         c
-                        for c in torus_neighbors(cell, grid_width, grid_height)
+                        for c in torus_neighbors(cell, grid_width, grid_height, neighbor_offsets)
                         if c not in agent_at_cell
                     ]
                     options = [cell] + empty_neighbors  # "stay" is always an option
                     scores = [
                         _mean_neighbor_payoff(
-                            c, grid_width, grid_height, agent_at_cell, total_payoff, rounds_played
+                            c, grid_width, grid_height, agent_at_cell, total_payoff, rounds_played,
+                            neighbor_offsets,
                         )
                         for c in options
                     ]
