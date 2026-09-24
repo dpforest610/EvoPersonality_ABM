@@ -25,7 +25,7 @@ import numpy as np
 from scipy.stats import spearmanr, wilcoxon
 
 SWEEP_DIR = Path("scripts/output/spatial_scale_check_k8_condition3")
-SEEDS = list(range(10))
+SEEDS = list(range(50))
 STEADY_STATE_MIN_GEN = 1000
 
 
@@ -83,13 +83,13 @@ def main():
         per_seed_median["K_self"].append(ks)
         print(f"{seed:>4}  {ko:>+8.3f}  {ks:>+8.3f}")
 
-    print("\n--- summary across 10 seeds (n=10, the correct unit) ---")
+    print(f"\n--- summary across {len(SEEDS)} seeds (n={len(SEEDS)}, the correct unit) ---")
     for channel in ["K_out", "K_self"]:
         vals = np.array(per_seed_median[channel])
         stat, pval = wilcoxon(vals) if not np.allclose(vals, 0) else (float("nan"), 1.0)
         print(f"{channel}: median={np.median(vals):+.3f}  "
               f"IQR=[{np.percentile(vals,25):+.3f},{np.percentile(vals,75):+.3f}]  "
-              f"positive in {int(np.sum(vals>0))}/10 seeds  "
+              f"positive in {int(np.sum(vals>0))}/{len(vals)} seeds  "
               f"Wilcoxon (vs 0) stat={stat:.1f} p={pval:.4f}")
 
     print("\n--- per-generation median-across-10-seeds trend (direction over time) ---")
