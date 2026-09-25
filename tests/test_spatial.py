@@ -9,6 +9,7 @@ from evopersonality_abm.spatial import (
     _softmax_sample,
     place_on_grid,
     run_coupled_evolution_spatial,
+    run_coupled_evolution_spatial_persistent,
     torus_neighbors,
 )
 
@@ -125,3 +126,55 @@ def test_run_coupled_evolution_spatial_rejects_non_divisible_phases():
     with pytest.raises(ValueError):
         run_coupled_evolution_spatial(population_size=10, generations=1, rounds_per_duel=5, n_phases=2,
                                        grid_width=4, grid_height=4, seed=0)
+
+
+def test_persistent_smoke_keeps_one_agent_per_cell_every_generation():
+    """A few generations, tiny population -- confirms the parent-cell
+    inheritance + leftover-scatter bookkeeping never double-occupies or
+    drops a cell."""
+    stats = run_coupled_evolution_spatial_persistent(
+        population_size=12,
+        generations=5,
+        rounds_per_duel=4,
+        n_phases=1,
+        grid_width=4,
+        grid_height=4,
+        seed=0,
+        mobile=False,
+    )
+    assert len(stats) == 5
+    for s in stats:
+        assert len(s.positions) == 12
+        assert len(set(s.positions)) == 12  # still one agent per cell
+        for x, y in s.positions:
+            assert 0 <= x < 4 and 0 <= y < 4
+
+
+def test_persistent_smoke_at_realistic_scale():
+    """Same population/grid shape as the actual experiment (100 agents,
+    12x12 grid, k=8/Moore, n_phases=1), just far fewer generations --
+    confirms the inheritance+scatter bookkeeping holds up at the scale
+    that matters, not just the tiny 12-agent case above."""
+    stats = run_coupled_evolution_spatial_persistent(
+        population_size=100,
+        generations=5,
+        rounds_per_duel=50,
+        n_phases=1,
+        grid_width=12,
+        grid_height=12,
+        seed=0,
+        mobile=False,
+        neighbor_offsets=MOORE_OFFSETS,
+    )
+    assert len(stats) == 5
+    for s in stats:
+        assert len(s.positions) == 100
+        assert len(set(s.positions)) == 100
+
+
+def test_persistent_rejects_non_divisible_phases():
+    with pytest.raises(ValueError):
+        run_coupled_evolution_spatial_persistent(
+            population_size=10, generations=1, rounds_per_duel=5, n_phases=2,
+            grid_width=4, grid_height=4, seed=0,
+        )
