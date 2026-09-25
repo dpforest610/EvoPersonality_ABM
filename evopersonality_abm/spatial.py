@@ -405,3 +405,124 @@ def run_coupled_evolution_spatial_persistent(
         agent_at_cell = {cell: i for i, cell in cell_of_agent.items()}
 
     return stats
+
+
+def ring_duel_edges(population_size: int, k: int, rng: random.Random) -> List[Tuple[int, int]]:
+    """A fresh random circular ordering ("ring") of all agents, each
+    agent duels its k nearest ring-neighbors (roughly half on each side;
+    one extra ahead for odd k) -- symmetric, exactly k-regular. k =
+    population_size-1 makes every agent adjacent to everyone, i.e. the
+    complete graph (well-mixed's exact pairing structure)."""
+    if k < 1 or k > population_size - 1:
+        raise ValueError(f"k={k} must be in [1, {population_size - 1}]")
+    if k % 2 == 1 and k != population_size - 1:
+        # Odd k (other than the complete-graph special case) can't be made
+        # exactly symmetric with this construction: the boundary offset at
+        # distance k//2+1 only fits on one side, and since edge existence
+        # is checked from EITHER endpoint, every node ends up receiving an
+        # extra reciprocal edge -- degree k+1, not k. Not needed for any k
+        # in the planned sweep (4/8/16/32/50 are even, 99 = population-1),
+        # so this is a validation, not a fix.
+        raise NotImplementedError(
+            f"ring_duel_edges only supports odd k when k == population_size - 1 "
+            f"(complete graph); k={k} is not exactly k-regular with this construction"
+        )
+    perm = list(range(population_size))
+    rng.shuffle(perm)
+    half_before = k // 2
+    half_after = k - half_before
+    offsets = list(range(1, half_after + 1)) + list(range(-half_before, 0))
+    edges = set()
+    for p in range(population_size):
+        agent_i = perm[p]
+        for offset in offsets:
+            agent_j = perm[(p + offset) % population_size]
+            edges.add((min(agent_i, agent_j), max(agent_i, agent_j)))
+    return list(edges)
+
+
+def run_coupled_evolution_opponent_count(
+    population_size: int = 100,
+    generations: int = 300,
+    rounds_per_duel: int = 50,
+    initial_memory_depth: int = 1,
+    point_mutation_rate: float = 0.05,
+    duplication_rate: float = 0.02,
+    split_rate: float = 0.02,
+    max_memory_depth: int = 8,
+    min_memory_depth: int = 0,
+    k_mutation_std: float = 0.05,
+    noise_std: float = 0.05,
+    seed: Optional[int] = None,
+    k: int = 8,
+) -> List[CoupledGenerationStats]:
+    """Pure "opponent count" sweep, stripped of 2D grid geometry -- see
+    chat: after ruling out movement, duel-chopping, cross-generation
+    persistence, and neighbor diversity as the driver behind experiment
+    A's K_out signal, the next question is whether the phenomenon itself
+    is real (does it scale monotonically with opponent count k?) rather
+    than a k=8/Moore-topology-specific artifact. A 2D torus grid can't
+    cleanly represent arbitrary k (wraparound collisions for k close to
+    the grid size), so this uses `ring_duel_edges` instead: every
+    generation, agents are placed on a freshly-shuffled ring and each
+    duels its k nearest ring-neighbors for one continuous
+    rounds_per_duel-round duel (n_phases=1 -- duel-chopping already
+    ruled out; no movement -- already ruled out; fresh ring every
+    generation -- matches experiment A's reshuffled-every-generation
+    baseline, not the cross-generation persistence variant, which
+    weakened rather than strengthened the effect).
+
+    k = population_size - 1 reduces to the complete graph, i.e. chapter
+    1's exact well-mixed pairing -- used as a built-in consistency
+    anchor, though chapter 1's own already-collected data is the
+    reference point in practice rather than re-simulating this case.
+    """
+    rng = random.Random(seed)
+    rng_ring = random.Random(rng.random())
+
+    genomes = [random_genome(initial_memory_depth, rng) for _ in range(population_size)]
+
+    stats: List[CoupledGenerationStats] = []
+    for gen in range(generations):
+        edges = ring_duel_edges(population_size, k, rng_ring)
+
+        total_payoff = [0.0] * population_size
+        rounds_played = [0] * population_size
+        for i, j in edges:
+            payoff_i, payoff_j = run_coupled_duel(genomes[i], genomes[j], rounds_per_duel, rng, noise_std)
+            total_payoff[i] += payoff_i
+            total_payoff[j] += payoff_j
+            rounds_played[i] += rounds_per_duel
+            rounds_played[j] += rounds_per_duel
+
+        payoffs = [
+            total_payoff[i] / rounds_played[i] if rounds_played[i] > 0 else 0.0
+            for i in range(population_size)
+        ]
+
+        stats.append(
+            CoupledGenerationStats(
+                generation=gen,
+                k_out=[g.k_out for g in genomes],
+                k_self=[g.k_self for g in genomes],
+                memory_depths=[g.table.memory_depth for g in genomes],
+                payoffs=payoffs,
+            )
+        )
+
+        genomes = select_and_reproduce(genomes, payoffs, rng)
+        genomes = [
+            mutate_genome(
+                g,
+                rng,
+                point_mutation_rate,
+                duplication_rate,
+                split_rate,
+                max_memory_depth,
+                min_memory_depth,
+                k_mutation_std,
+            )
+            for g in genomes
+        ]
+
+    return stats

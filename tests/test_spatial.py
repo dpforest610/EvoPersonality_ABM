@@ -8,6 +8,8 @@ from evopersonality_abm.spatial import (
     _mean_neighbor_payoff,
     _softmax_sample,
     place_on_grid,
+    ring_duel_edges,
+    run_coupled_evolution_opponent_count,
     run_coupled_evolution_spatial,
     run_coupled_evolution_spatial_persistent,
     torus_neighbors,
@@ -178,3 +180,59 @@ def test_persistent_rejects_non_divisible_phases():
             population_size=10, generations=1, rounds_per_duel=5, n_phases=2,
             grid_width=4, grid_height=4, seed=0,
         )
+
+
+def test_ring_duel_edges_gives_each_agent_exactly_k_neighbors():
+    rng = random.Random(0)
+    for k in (4, 8, 16, 32, 50, 99):
+        edges = ring_duel_edges(100, k, rng)
+        degree = {i: 0 for i in range(100)}
+        for i, j in edges:
+            assert i != j
+            degree[i] += 1
+            degree[j] += 1
+        assert all(d == k for d in degree.values())
+
+
+def test_ring_duel_edges_rejects_odd_k_other_than_complete_graph():
+    rng = random.Random(0)
+    with pytest.raises(NotImplementedError):
+        ring_duel_edges(100, 15, rng)
+
+
+def test_ring_duel_edges_k_equals_n_minus_1_is_complete_graph():
+    rng = random.Random(0)
+    edges = ring_duel_edges(10, 9, rng)
+    assert len(edges) == 10 * 9 // 2  # C(10,2), i.e. every pair duels
+
+
+def test_ring_duel_edges_rejects_out_of_range_k():
+    rng = random.Random(0)
+    with pytest.raises(ValueError):
+        ring_duel_edges(10, 0, rng)
+    with pytest.raises(ValueError):
+        ring_duel_edges(10, 10, rng)
+
+
+def test_run_coupled_evolution_opponent_count_smoke():
+    stats = run_coupled_evolution_opponent_count(
+        population_size=20, generations=3, rounds_per_duel=4, k=4, seed=0,
+    )
+    assert len(stats) == 3
+    for s in stats:
+        assert len(s.k_out) == 20
+        assert len(s.payoffs) == 20
+        assert all(p >= 0.0 for p in s.payoffs)
+
+
+def test_run_coupled_evolution_opponent_count_k_equals_full_matches_scale():
+    """k = population_size - 1 should behave like well-mixed: every agent
+    gets exactly population_size - 1 opponents' worth of rounds played."""
+    stats = run_coupled_evolution_opponent_count(
+        population_size=12, generations=1, rounds_per_duel=5, k=11, seed=0,
+    )
+    # every one of the 12 agents duels all 11 others once (5 rounds each)
+    # -- can't inspect rounds_played directly (CoupledGenerationStats has
+    # no such field), but a full run without error at k=n-1 is itself the
+    # contract being tested (ring_duel_edges' own test covers the count).
+    assert len(stats[0].payoffs) == 12
