@@ -27,9 +27,10 @@ and checkpointed: commits + pushes every --checkpoint-every completed
 (k, seed) units (default 5), so a container restart loses at most a
 few seeds of work. Designed to fit a ~72 hour budget across 9 k x 50
 seeds x 5000 generations with 4 parallel workers (estimated ~63.5
-CPU-hours / 4 cores =~ 63.5 wall hours, ordered cheapest-k-first so the
-most diagnostic points -- the small-k end, including whether k=4 stays
-a trough at full power -- finish earliest).
+CPU-hours / 4 cores =~ 63.5 wall hours, ordered k=4,8,12,16,6,24,32,40,50
+so the four most decisive points for the inverted-U question (is k=4 a
+trough, is k=8-16 a peak) finish first -- an unattended run that stops
+partway still lets that question be read).
 
 Usage:
     python3 scripts/run_opponent_count_precision_sweep.py
@@ -52,7 +53,12 @@ sys.path.insert(0, str(REPO_ROOT))
 from evopersonality_abm.spatial import run_coupled_evolution_opponent_count
 
 OUT_ROOT = Path("scripts/output/opponent_count_precision_sweep")
-K_VALUES = [4, 6, 8, 12, 16, 24, 32, 40, 50]  # ascending: cheapest (most diagnostic) first
+# Priority order (explicit instruction): k=4,8,12,16 are the decisive points for the
+# inverted-U question (is k=4 a trough, is the k=8-16 region a peak) and run FIRST,
+# so an unattended run that stops partway still lets that question be read off. k=6
+# fills in peak resolution next; k=24,32,40,50 are deprioritized -- the coarse scan
+# already showed the far end is low, so they're the least urgent to finish.
+K_VALUES = [4, 8, 12, 16, 6, 24, 32, 40, 50]
 SEEDS = list(range(50))
 GENERATIONS = 5000
 LOG_INTERVAL = 100  # matches chapter 1's convention exactly
