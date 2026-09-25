@@ -8,3 +8,4 @@ scripts/output/*_run.log
 scripts/output/selection_vs_drift_sweep_smoke/
 scripts/output/selection_vs_drift_sweep_with_depth_smoke/
 scripts/output/selection_partial_correlation_smoke/
+scripts/output/opponent_count_precision_sweep_smoke/
