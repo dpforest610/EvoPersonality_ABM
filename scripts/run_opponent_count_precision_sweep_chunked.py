@@ -38,10 +38,12 @@ Usage:
 
 import argparse
 import csv
+import os
 import pickle
 import statistics
 import subprocess
 import sys
+import tempfile
 import time
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from pathlib import Path
@@ -199,6 +201,74 @@ def commit_and_push(paths: List[Path], message: str) -> None:
     print(f"git push ultimately failed for: {message}", flush=True)
 
 
+def push_checkpoint_snapshot_to_scratch_branch(
+    paths: List[Path], message: str, branch: str = "checkpoint-scratch"
+) -> None:
+    """Pushes in-progress checkpoint .pkl files to a dedicated branch as a
+    single history-free root commit (no parent), force-pushed each time.
+
+    This exists because the real git history (committed via commit_and_push)
+    should only ever grow from permanent, final results -- not from
+    transient in-progress checkpoints that get superseded (and deleted)
+    every ~600s. Committing those normally would add a new ~60-240KB blob
+    per checkpoint file to history on every poll, across up to 50 seeds x
+    3 k-values x many chunks over a 72-hour run, which was estimated to add
+    hundreds of MB of permanent, un-reclaimable bloat to the repo.
+
+    Using a throwaway temp index (GIT_INDEX_FILE) instead of the real repo
+    index means this never touches the running script's own working-tree
+    state or the main branch's staged changes. Building the tree from only
+    the given paths (not a full repo snapshot) keeps each pushed commit
+    minimal. commit-tree with no -p parent makes a fresh root commit each
+    time, so force-pushing it over the branch's previous tip leaves the old
+    commit unreferenced (and eventually GC'd) instead of retained in
+    history -- the key property that avoids repo-size growth.
+    """
+    if not paths:
+        return
+    with tempfile.TemporaryDirectory() as tmpdir:
+        env = dict(os.environ)
+        env["GIT_INDEX_FILE"] = os.path.join(tmpdir, "index")
+        rel_paths = [str(p.resolve().relative_to(REPO_ROOT)) for p in paths]
+
+        add = subprocess.run(
+            ["git", "add", "-f", "--", *rel_paths],
+            cwd=REPO_ROOT, env=env, capture_output=True, text=True,
+        )
+        if add.returncode != 0:
+            print(f"scratch-branch git add failed for {message}: {add.stderr.strip()}", flush=True)
+            return
+        write_tree = subprocess.run(
+            ["git", "write-tree"], cwd=REPO_ROOT, env=env, capture_output=True, text=True,
+        )
+        if write_tree.returncode != 0:
+            print(f"scratch-branch write-tree failed for {message}: {write_tree.stderr.strip()}", flush=True)
+            return
+        tree_sha = write_tree.stdout.strip()
+        commit_tree = subprocess.run(
+            ["git", "commit-tree", tree_sha, "-m", message],
+            cwd=REPO_ROOT, env=env, capture_output=True, text=True,
+        )
+        if commit_tree.returncode != 0:
+            print(f"scratch-branch commit-tree failed for {message}: {commit_tree.stderr.strip()}", flush=True)
+            return
+        commit_sha = commit_tree.stdout.strip()
+
+        delay = 2
+        for attempt in range(4):
+            push = subprocess.run(
+                ["git", "push", "--force", "origin", f"{commit_sha}:refs/heads/{branch}"],
+                cwd=REPO_ROOT, capture_output=True, text=True,
+            )
+            if push.returncode == 0:
+                print(f"pushed checkpoint snapshot to {branch}: {message}", flush=True)
+                return
+            print(f"scratch-branch push failed (attempt {attempt + 1}) for {message}: {push.stderr.strip()}", flush=True)
+            time.sleep(delay)
+            delay *= 2
+        print(f"scratch-branch push ultimately failed for: {message}", flush=True)
+
+
 def parse_args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--chunk-size", type=int, default=CHUNK_SIZE)
@@ -295,7 +365,7 @@ def main():
             if do_push and (time.time() - last_checkpoint_poll) >= args.checkpoint_poll_seconds:
                 ckpt_files = sorted(out_root.glob("k*/seed_*_checkpoint.pkl"))
                 if ckpt_files:
-                    commit_and_push(
+                    push_checkpoint_snapshot_to_scratch_branch(
                         ckpt_files,
                         f"Opponent-count precision sweep (chunked): periodic checkpoint snapshot "
                         f"({len(ckpt_files)} in-progress seed(s))",
