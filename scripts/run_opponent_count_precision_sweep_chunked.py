@@ -43,7 +43,7 @@ import statistics
 import subprocess
 import sys
 import time
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 from pathlib import Path
 from typing import List, Tuple
 
@@ -204,6 +204,10 @@ def parse_args():
     p.add_argument("--chunk-size", type=int, default=CHUNK_SIZE)
     p.add_argument("--checkpoint-every", type=int, default=5,
                    help="git commit+push every N newly-completed (k,seed) units")
+    p.add_argument("--checkpoint-poll-seconds", type=int, default=600,
+                   help="also commit+push any in-progress chunk checkpoints at least this often, "
+                        "independent of full-seed completions (protects chunk progress against a "
+                        "container reset that wipes local disk before any seed fully finishes)")
     p.add_argument("--workers", type=int, default=4)
     p.add_argument("--smoke", action="store_true",
                    help="wiring check: k=8 only, 2 seeds x 50 gen, chunk-size 10, no push, separate out-dir")
@@ -251,37 +255,52 @@ def main():
     paths_since_checkpoint: List[Path] = []
 
     t_start = time.time()
+    last_checkpoint_poll = time.time()
     with ProcessPoolExecutor(max_workers=args.workers) as executor:
         futures = {
             executor.submit(run_one_seed_chunked, k, seed, generations, chunk_size, str(out_root)): (k, seed)
             for k, seed in pending
         }
-        for future in as_completed(futures):
-            k, seed, agg_rows, individual_rows, elapsed, n_chunks = future.result()
-            agg_path = agg_path_for(out_root, k, seed)
-            ind_path = individual_path_for(out_root, k, seed)
-            write_agg_csv(agg_path, agg_rows)
-            write_individual_csv(ind_path, individual_rows)
-            checkpoint_path_for(out_root, k, seed).unlink(missing_ok=True)
+        while futures:
+            done, not_done = wait(futures, timeout=60, return_when=FIRST_COMPLETED)
+            for future in done:
+                k, seed, agg_rows, individual_rows, elapsed, n_chunks = future.result()
+                agg_path = agg_path_for(out_root, k, seed)
+                ind_path = individual_path_for(out_root, k, seed)
+                write_agg_csv(agg_path, agg_rows)
+                write_individual_csv(ind_path, individual_rows)
+                checkpoint_path_for(out_root, k, seed).unlink(missing_ok=True)
 
-            completed_count += 1
-            batch_since_checkpoint.append((k, seed))
-            paths_since_checkpoint.extend([agg_path, ind_path])
-            per_gen_ms = elapsed / (n_chunks * chunk_size) * 1000 if n_chunks else 0.0
-            print(f"k={k} seed={seed} done ({completed_count}/{len(units)}): "
-                  f"{elapsed:.1f}s this call ({n_chunks} chunk(s)), {per_gen_ms:.1f} ms/gen", flush=True)
+                completed_count += 1
+                batch_since_checkpoint.append((k, seed))
+                paths_since_checkpoint.extend([agg_path, ind_path])
+                per_gen_ms = elapsed / (n_chunks * chunk_size) * 1000 if n_chunks else 0.0
+                print(f"k={k} seed={seed} done ({completed_count}/{len(units)}): "
+                      f"{elapsed:.1f}s this call ({n_chunks} chunk(s)), {per_gen_ms:.1f} ms/gen", flush=True)
 
-            if do_push:
-                threshold = (completed_count // args.checkpoint_every) * args.checkpoint_every
-                if threshold > last_checkpoint:
-                    message = (
-                        f"Opponent-count precision sweep (chunked): {completed_count}/{len(units)} units complete "
-                        f"(batch: {sorted(batch_since_checkpoint)})"
+                if do_push:
+                    threshold = (completed_count // args.checkpoint_every) * args.checkpoint_every
+                    if threshold > last_checkpoint:
+                        message = (
+                            f"Opponent-count precision sweep (chunked): {completed_count}/{len(units)} units complete "
+                            f"(batch: {sorted(batch_since_checkpoint)})"
+                        )
+                        commit_and_push(paths_since_checkpoint, message)
+                        last_checkpoint = threshold
+                        batch_since_checkpoint = []
+                        paths_since_checkpoint = []
+
+            futures = {f: futures[f] for f in not_done}
+
+            if do_push and (time.time() - last_checkpoint_poll) >= args.checkpoint_poll_seconds:
+                ckpt_files = sorted(out_root.glob("k*/seed_*_checkpoint.pkl"))
+                if ckpt_files:
+                    commit_and_push(
+                        ckpt_files,
+                        f"Opponent-count precision sweep (chunked): periodic checkpoint snapshot "
+                        f"({len(ckpt_files)} in-progress seed(s))",
                     )
-                    commit_and_push(paths_since_checkpoint, message)
-                    last_checkpoint = threshold
-                    batch_since_checkpoint = []
-                    paths_since_checkpoint = []
+                last_checkpoint_poll = time.time()
 
     if do_push and batch_since_checkpoint:
         message = (
