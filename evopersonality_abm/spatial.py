@@ -455,7 +455,12 @@ def run_coupled_evolution_opponent_count(
     noise_std: float = 0.05,
     seed: Optional[int] = None,
     k: int = 8,
-) -> List[CoupledGenerationStats]:
+    start_generation: int = 0,
+    initial_genomes=None,
+    rng_state=None,
+    rng_ring_state=None,
+    return_state: bool = False,
+):
     """Pure "opponent count" sweep, stripped of 2D grid geometry -- see
     chat: after ruling out movement, duel-chopping, cross-generation
     persistence, and neighbor diversity as the driver behind experiment
@@ -476,14 +481,32 @@ def run_coupled_evolution_opponent_count(
     1's exact well-mixed pairing -- used as a built-in consistency
     anchor, though chapter 1's own already-collected data is the
     reference point in practice rather than re-simulating this case.
-    """
-    rng = random.Random(seed)
-    rng_ring = random.Random(rng.random())
 
-    genomes = [random_genome(initial_memory_depth, rng) for _ in range(population_size)]
+    Chunked-checkpoint resume: pass initial_genomes/rng_state/
+    rng_ring_state (as returned by a previous call with
+    return_state=True) together with start_generation to continue a run
+    exactly where it left off -- random.Random's getstate()/setstate()
+    captures the full internal generator state, so resuming reproduces
+    bit-identical results to an uninterrupted run (verified by test).
+    With return_state=True, returns (stats, final_genomes, rng_state,
+    rng_ring_state) instead of just stats, so a caller can checkpoint.
+    """
+    if rng_state is not None and rng_ring_state is not None:
+        rng = random.Random()
+        rng.setstate(rng_state)
+        rng_ring = random.Random()
+        rng_ring.setstate(rng_ring_state)
+    else:
+        rng = random.Random(seed)
+        rng_ring = random.Random(rng.random())
+
+    if initial_genomes is not None:
+        genomes = initial_genomes
+    else:
+        genomes = [random_genome(initial_memory_depth, rng) for _ in range(population_size)]
 
     stats: List[CoupledGenerationStats] = []
-    for gen in range(generations):
+    for gen in range(start_generation, generations):
         edges = ring_duel_edges(population_size, k, rng_ring)
 
         total_payoff = [0.0] * population_size
@@ -525,4 +548,6 @@ def run_coupled_evolution_opponent_count(
             for g in genomes
         ]
 
+    if return_state:
+        return stats, genomes, rng.getstate(), rng_ring.getstate()
     return stats

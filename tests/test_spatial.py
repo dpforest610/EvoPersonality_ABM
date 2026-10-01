@@ -16,6 +16,73 @@ from evopersonality_abm.spatial import (
 )
 
 
+def _stats_to_comparable(stats):
+    """Flattens a stats list into plain-Python values for an exact
+    equality check (K values are floats from deterministic arithmetic
+    given identical rng draws, so == is meaningful here, not just
+    approximate)."""
+    return [
+        (s.generation, tuple(s.k_out), tuple(s.k_self), tuple(s.memory_depths), tuple(s.payoffs))
+        for s in stats
+    ]
+
+
+def test_opponent_count_chunked_resume_is_bit_identical_to_uninterrupted():
+    """Priority-1 safety check before relying on chunked checkpointing in
+    production: running 4,8,12,...,40 generations in one shot must give
+    EXACTLY the same per-generation (k_out, k_self, memory_depth, payoff)
+    as stopping at generation 20 (return_state=True), saving the
+    returned (genomes, rng_state, rng_ring_state), and resuming from
+    generation 20 to 40 with those exact saved values."""
+    common_kwargs = dict(population_size=20, rounds_per_duel=4, k=6, seed=42)
+
+    uninterrupted = run_coupled_evolution_opponent_count(generations=40, **common_kwargs)
+
+    first_half, genomes, rng_state, rng_ring_state = run_coupled_evolution_opponent_count(
+        generations=20, return_state=True, **common_kwargs
+    )
+    second_half = run_coupled_evolution_opponent_count(
+        generations=40,
+        start_generation=20,
+        initial_genomes=genomes,
+        rng_state=rng_state,
+        rng_ring_state=rng_ring_state,
+        **common_kwargs,
+    )
+    resumed = first_half + second_half
+
+    assert len(uninterrupted) == len(resumed) == 40
+    assert _stats_to_comparable(uninterrupted) == _stats_to_comparable(resumed)
+
+
+def test_opponent_count_chunked_resume_works_across_three_chunks():
+    """Same bit-exact check, but split into 3 uneven chunks, closer to
+    how the production chunked runner will actually call this (repeated
+    checkpoint/resume cycles, not just one)."""
+    common_kwargs = dict(population_size=16, rounds_per_duel=4, k=4, seed=7)
+
+    uninterrupted = run_coupled_evolution_opponent_count(generations=30, **common_kwargs)
+
+    all_stats = []
+    genomes, rng_state, rng_ring_state = None, None, None
+    start = 0
+    for chunk_end in (7, 19, 30):
+        chunk_stats, genomes, rng_state, rng_ring_state = run_coupled_evolution_opponent_count(
+            generations=chunk_end,
+            start_generation=start,
+            initial_genomes=genomes,
+            rng_state=rng_state,
+            rng_ring_state=rng_ring_state,
+            return_state=True,
+            **common_kwargs,
+        )
+        all_stats.extend(chunk_stats)
+        start = chunk_end
+
+    assert len(uninterrupted) == len(all_stats) == 30
+    assert _stats_to_comparable(uninterrupted) == _stats_to_comparable(all_stats)
+
+
 def test_torus_neighbors_wraps_at_edges():
     # corner (0,0) on a 5x5 torus: left wraps to x=4, up wraps to y=4.
     neighbors = set(torus_neighbors((0, 0), width=5, height=5))
