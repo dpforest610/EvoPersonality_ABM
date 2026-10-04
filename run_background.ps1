@@ -1,15 +1,22 @@
-# start_run.bat から呼ばれるヘルパー。実際のランを、このウィンドウ(と、
-# これを呼んだ start_run.bat のウィンドウ)が閉じても生き続ける、独立した
-# 非表示プロセスとして起動する。
+# Helper called by start_run.bat. Launches the actual sweep as an
+# independent, hidden process that keeps running even after this window
+# (and the start_run.bat window that called it) is closed.
 #
-# 設計上の選択: 「このウィンドウを閉じても続く」方式(ユーザーが誤って
-# ウィンドウを閉じても処理が止まらない)を選び、「閉じないでください」と
-# 表示する最小化ウィンドウ方式は採用しなかった。
+# Design choice: "survives the launching window being closed" was chosen
+# over "runs in a minimized window you must not close".
 #
-# 実行したいコマンドは、PowerShellの文字列として直接 Start-Process に渡すの
-# ではなく、一度 .cmd ファイルに書き出してから、そのファイルを起動する。
-# PowerShell の引用符を cmd.exe 側でもう一度解釈させる形は、入れ子の引用符が
-# 崩れやすい典型的な失敗パターンのため、避けている。
+# The command to run is first written to a one-off .cmd file, then that
+# file is launched -- rather than handing Start-Process a command string
+# with nested quotes directly. Letting cmd.exe re-interpret a quoted
+# PowerShell string is a common, hard-to-notice failure mode; writing it
+# to a file sidesteps that entirely.
+#
+# This file is plain ASCII on purpose. Windows PowerShell 5.1 (the
+# version that ships with Windows, as opposed to PowerShell 7) can
+# misdetect the encoding of a BOM-less UTF-8 file and garble non-ASCII
+# text, which previously caused a parse error here. ASCII bytes are
+# unambiguous under every encoding Windows might guess, so this avoids
+# the whole problem rather than working around it.
 
 param(
     [int]$Workers = 3
@@ -25,10 +32,13 @@ $LogPath = Join-Path $LogDir "sweep_run.log"
 $LauncherPath = Join-Path $LogDir "_launcher.cmd"
 
 if (-not (Test-Path $PythonExe)) {
-    Write-Host "[ERROR] venv が見つかりません。先に setup_windows.bat をダブルクリックしてください。"
+    Write-Host "[ERROR] venv not found. Double-click setup_windows.bat first."
     exit 1
 }
 
+# Created here AND in start_run.bat before this script is even invoked --
+# belt and suspenders, since nothing later in this script (including the
+# log redirect inside the generated launcher file) works without it.
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 
 $LauncherLines = @(
@@ -39,7 +49,7 @@ Set-Content -Path $LauncherPath -Value $LauncherLines -Encoding ASCII
 
 Start-Process -FilePath $LauncherPath -WorkingDirectory $RepoRoot -WindowStyle Hidden
 
-Write-Host "起動コマンドを送信しました。数秒待って状態を確認します..."
+Write-Host "Launch command sent. Waiting a few seconds to check status..."
 Start-Sleep -Seconds 3
 
 $Tail = ""
@@ -50,20 +60,20 @@ if (Test-Path $LogPath) {
 if ($Tail -match "already holds the lock") {
     Write-Host ""
     Write-Host "=============================================="
-    Write-Host " すでに実行中です。多重には起動していません。"
+    Write-Host " Already running. This did NOT start a second copy."
     Write-Host "=============================================="
     Write-Host $Tail
 } else {
     Write-Host ""
     Write-Host "=============================================="
-    Write-Host " 起動しました。このウィンドウは閉じて構いません。"
-    Write-Host " ランは裏側(非表示のプロセス)で動き続けます。"
-    Write-Host " 進捗確認: check_progress.bat"
-    Write-Host " 停止:     stop_run.bat"
+    Write-Host " Started. You can close this window now."
+    Write-Host " The run continues as a hidden background process."
+    Write-Host " Check progress: check_progress.bat"
+    Write-Host " Stop:           stop_run.bat"
     Write-Host "=============================================="
     if ($Tail) {
         Write-Host ""
-        Write-Host "--- ログ(直近) ---"
+        Write-Host "--- Recent log output ---"
         Write-Host $Tail
     }
 }

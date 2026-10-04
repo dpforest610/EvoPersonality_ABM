@@ -1,15 +1,14 @@
 @echo off
-chcp 65001 >nul
 cd /d "%~dp0"
 
 echo ============================================
-echo  停止
+echo  Stop
 echo ============================================
 echo.
 
 set LOCKFILE=scripts\output\opponent_count_precision_sweep\.run.lock
 if not exist "%LOCKFILE%" (
-    echo 現在、実行中のランはありません(ロックファイルなし)。
+    echo No run is currently in progress (no lock file).
     pause
     exit /b 0
 )
@@ -18,30 +17,30 @@ set LOCKPID=
 for /f "delims=" %%P in (%LOCKFILE%) do set LOCKPID=%%P
 
 if "%LOCKPID%"=="" (
-    echo [ERROR] ロックファイルの内容を読み取れませんでした。
+    echo [ERROR] Could not read the lock file's contents.
     pause
     exit /b 1
 )
 
 tasklist /FI "PID eq %LOCKPID%" 2>nul | find "%LOCKPID%" >nul
 if errorlevel 1 (
-    echo プロセス(PID %LOCKPID%)は既に動いていません(前回異常終了した可能性があります)。
-    echo 特に何もする必要はありません。次回 start_run.bat で続きから再開されます。
+    echo Process PID %LOCKPID% is not running (it may have already stopped).
+    echo Nothing to do -- start_run.bat will resume from the last checkpoint.
     pause
     exit /b 0
 )
 
-echo プロセス(PID %LOCKPID%)を停止します...
+echo Stopping process PID %LOCKPID%...
 taskkill /PID %LOCKPID% /T /F
 if errorlevel 1 (
-    echo [ERROR] 停止に失敗しました。タスクマネージャーから python.exe を手動で終了してください。
+    echo [ERROR] Failed to stop it. Please end python.exe manually in Task Manager.
     pause
     exit /b 1
 )
 
 echo.
-echo 停止しました。直前のチャンク(最大500世代、k=99で最大約12分)分の進捗だけ
-echo 失われる可能性がありますが、それより前はチェックポイントに保存されているので、
-echo 次回 start_run.bat を実行すれば続きから再開されます。
+echo Stopped. Only the most recent chunk (up to 500 generations, up to about
+echo 12 minutes for k=99) of progress may be lost. Everything before that is
+echo already on disk, so start_run.bat will resume from there.
 echo.
 pause
