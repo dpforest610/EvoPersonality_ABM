@@ -38,6 +38,7 @@ Usage:
 
 import argparse
 import csv
+import json
 import os
 import pickle
 import statistics
@@ -46,6 +47,7 @@ import sys
 import tempfile
 import time
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Tuple
 
@@ -87,6 +89,51 @@ def individual_path_for(out_root, k, seed):
 
 def checkpoint_path_for(out_root, k, seed):
     return out_root / f"k{k}" / f"seed_{seed}_checkpoint.pkl"
+
+
+def lock_path_for(out_root: Path) -> Path:
+    return out_root / ".run.lock"
+
+
+def acquire_lock(out_root: Path) -> Path:
+    """Refuses to start a second instance against the same out_root while
+    one is already running (e.g. the user double-clicking the start script,
+    or a cloud run and a local run pointed at the same checkpoints). A lock
+    held by a pid that is no longer alive (crash, power loss, kill -9) is
+    treated as stale and silently taken over -- that is the normal case on
+    every "resume after an interruption" restart, not an error."""
+    lock_path = lock_path_for(out_root)
+    if lock_path.exists():
+        old_pid = None
+        try:
+            old_pid = int(lock_path.read_text().strip())
+        except (ValueError, OSError):
+            pass
+        alive = False
+        if old_pid is not None:
+            try:
+                os.kill(old_pid, 0)
+                alive = True
+            except ProcessLookupError:
+                alive = False
+            except PermissionError:
+                alive = True  # exists under another user -- assume it's real
+        if alive:
+            print(
+                f"Another run (pid {old_pid}) already holds the lock at {lock_path}.\n"
+                f"Refusing to start a second instance against the same output directory.\n"
+                f"If you're sure nothing is actually running, delete that file and retry.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        print(f"Found a stale lock (pid {old_pid} is not running) -- taking over.", flush=True)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path.write_text(str(os.getpid()))
+    return lock_path
+
+
+def release_lock(lock_path: Path) -> None:
+    lock_path.unlink(missing_ok=True)
 
 
 def run_one_seed_chunked(k: int, seed: int, generations: int, chunk_size: int, out_root_str: str):
@@ -172,6 +219,48 @@ def write_individual_csv(path: Path, rows: List[IndividualRow]) -> None:
         w.writerow(["generation", "agent_index", "k_out", "k_self", "memory_depth", "payoff"])
         for gen, idx, k_out, k_self, depth, payoff in rows:
             w.writerow([gen, idx, f"{k_out:.6f}", f"{k_self:.6f}", depth, f"{payoff:.6f}"])
+
+
+def status_path_for(out_root: Path) -> Path:
+    return Path("progress") / f"{out_root.name}_status.json"
+
+
+def write_status_json(path: Path, out_root: Path, k_values: List[int], seeds: List[int], generations: int) -> None:
+    """Writes a small summary (per-k done count out of len(seeds), and the
+    next_generation of any in-progress checkpoint) -- NOT the checkpoints
+    themselves. Meant to be pushed to the main branch cheaply and often (the
+    file itself stays tiny; only its content changes between pushes), so
+    anyone can check progress by just reading GitHub without needing access
+    to whatever machine is actually running the sweep."""
+    by_k = {}
+    for k in k_values:
+        k_dir = out_root / f"k{k}"
+        done = sum(
+            1 for s in seeds
+            if (k_dir / f"seed_{s}_timeseries.csv").exists()
+            and (k_dir / f"seed_{s}_individual_log.csv").exists()
+        )
+        in_progress = []
+        for s in seeds:
+            ckpt_path = checkpoint_path_for(out_root, k, s)
+            if ckpt_path.exists():
+                try:
+                    with open(ckpt_path, "rb") as f:
+                        ckpt = pickle.load(f)
+                    in_progress.append({"seed": s, "next_generation": ckpt["next_generation"]})
+                except Exception:
+                    pass
+        by_k[str(k)] = {"done": done, "total": len(seeds), "in_progress": in_progress}
+
+    data = {
+        "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "generations_per_seed": generations,
+        "by_k": by_k,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
 
 
 def _git(*args: str) -> subprocess.CompletedProcess:
@@ -275,9 +364,18 @@ def parse_args():
     p.add_argument("--checkpoint-every", type=int, default=5,
                    help="git commit+push every N newly-completed (k,seed) units")
     p.add_argument("--checkpoint-poll-seconds", type=int, default=600,
-                   help="also commit+push any in-progress chunk checkpoints at least this often, "
-                        "independent of full-seed completions (protects chunk progress against a "
-                        "container reset that wipes local disk before any seed fully finishes)")
+                   help="if --push-checkpoints is set, push the in-progress chunk checkpoints "
+                        "to checkpoint-scratch at least this often")
+    p.add_argument("--push-checkpoints", action="store_true",
+                   help="also push periodic in-progress checkpoint .pkl snapshots to the "
+                        "checkpoint-scratch branch (off by default: a local run's own disk is "
+                        "its own backup, so this is mainly for an unattended cloud run with no "
+                        "persistent disk of its own)")
+    p.add_argument("--status-interval-seconds", type=int, default=3600,
+                   help="write progress/<out-dir-name>_status.json (per-k done counts and "
+                        "in-progress generations, NOT the checkpoints) and push just that one "
+                        "small file to the main branch at least this often. 0 disables. A push "
+                        "failure here is logged and retried next cycle -- it never stops the run")
     p.add_argument("--workers", type=int, default=4)
     p.add_argument("--smoke", action="store_true",
                    help="wiring check: k=8 only, 2 seeds x 50 gen, chunk-size 10, no push, separate out-dir")
@@ -302,85 +400,103 @@ def main():
         out_root = OUT_ROOT
         do_push = True
 
-    units = [(k, seed) for k in k_values for seed in seeds]
-    for k in k_values:
-        (out_root / f"k{k}").mkdir(parents=True, exist_ok=True)
+    push_checkpoints = do_push and args.push_checkpoints
+    status_interval = args.status_interval_seconds if do_push else 0
+    status_path = REPO_ROOT / status_path_for(out_root)
 
-    pending = [
-        (k, s) for k, s in units
-        if not (agg_path_for(out_root, k, s).exists() and individual_path_for(out_root, k, s).exists())
-    ]
-    already_done = len(units) - len(pending)
-    n_with_checkpoint = sum(1 for k, s in pending if checkpoint_path_for(out_root, k, s).exists())
-    print(f"{already_done}/{len(units)} (k,seed) units already fully done", flush=True)
-    print(f"{len(pending)} pending ({n_with_checkpoint} resuming from an in-progress checkpoint)", flush=True)
+    lock_path = acquire_lock(out_root)
+    try:
+        units = [(k, seed) for k in k_values for seed in seeds]
+        for k in k_values:
+            (out_root / f"k{k}").mkdir(parents=True, exist_ok=True)
 
-    if not pending:
-        print("All units already complete -- nothing to run.", flush=True)
-        return
+        pending = [
+            (k, s) for k, s in units
+            if not (agg_path_for(out_root, k, s).exists() and individual_path_for(out_root, k, s).exists())
+        ]
+        already_done = len(units) - len(pending)
+        n_with_checkpoint = sum(1 for k, s in pending if checkpoint_path_for(out_root, k, s).exists())
+        print(f"{already_done}/{len(units)} (k,seed) units already fully done", flush=True)
+        print(f"{len(pending)} pending ({n_with_checkpoint} resuming from an in-progress checkpoint)", flush=True)
 
-    completed_count = already_done
-    last_checkpoint = (completed_count // args.checkpoint_every) * args.checkpoint_every
-    batch_since_checkpoint: List[Tuple[int, int]] = []
-    paths_since_checkpoint: List[Path] = []
+        if not pending:
+            print("All units already complete -- nothing to run.", flush=True)
+            return
 
-    t_start = time.time()
-    last_checkpoint_poll = time.time()
-    with ProcessPoolExecutor(max_workers=args.workers) as executor:
-        futures = {
-            executor.submit(run_one_seed_chunked, k, seed, generations, chunk_size, str(out_root)): (k, seed)
-            for k, seed in pending
-        }
-        while futures:
-            done, not_done = wait(futures, timeout=60, return_when=FIRST_COMPLETED)
-            for future in done:
-                k, seed, agg_rows, individual_rows, elapsed, n_chunks = future.result()
-                agg_path = agg_path_for(out_root, k, seed)
-                ind_path = individual_path_for(out_root, k, seed)
-                write_agg_csv(agg_path, agg_rows)
-                write_individual_csv(ind_path, individual_rows)
-                checkpoint_path_for(out_root, k, seed).unlink(missing_ok=True)
+        completed_count = already_done
+        last_checkpoint = (completed_count // args.checkpoint_every) * args.checkpoint_every
+        batch_since_checkpoint: List[Tuple[int, int]] = []
+        paths_since_checkpoint: List[Path] = []
 
-                completed_count += 1
-                batch_since_checkpoint.append((k, seed))
-                paths_since_checkpoint.extend([agg_path, ind_path])
-                per_gen_ms = elapsed / (n_chunks * chunk_size) * 1000 if n_chunks else 0.0
-                print(f"k={k} seed={seed} done ({completed_count}/{len(units)}): "
-                      f"{elapsed:.1f}s this call ({n_chunks} chunk(s)), {per_gen_ms:.1f} ms/gen", flush=True)
+        t_start = time.time()
+        last_checkpoint_poll = time.time()
+        last_status_push = time.time()
+        with ProcessPoolExecutor(max_workers=args.workers) as executor:
+            futures = {
+                executor.submit(run_one_seed_chunked, k, seed, generations, chunk_size, str(out_root)): (k, seed)
+                for k, seed in pending
+            }
+            while futures:
+                done, not_done = wait(futures, timeout=60, return_when=FIRST_COMPLETED)
+                for future in done:
+                    k, seed, agg_rows, individual_rows, elapsed, n_chunks = future.result()
+                    agg_path = agg_path_for(out_root, k, seed)
+                    ind_path = individual_path_for(out_root, k, seed)
+                    write_agg_csv(agg_path, agg_rows)
+                    write_individual_csv(ind_path, individual_rows)
+                    checkpoint_path_for(out_root, k, seed).unlink(missing_ok=True)
 
-                if do_push:
-                    threshold = (completed_count // args.checkpoint_every) * args.checkpoint_every
-                    if threshold > last_checkpoint:
-                        message = (
-                            f"Opponent-count precision sweep (chunked): {completed_count}/{len(units)} units complete "
-                            f"(batch: {sorted(batch_since_checkpoint)})"
+                    completed_count += 1
+                    batch_since_checkpoint.append((k, seed))
+                    paths_since_checkpoint.extend([agg_path, ind_path])
+                    per_gen_ms = elapsed / (n_chunks * chunk_size) * 1000 if n_chunks else 0.0
+                    print(f"k={k} seed={seed} done ({completed_count}/{len(units)}): "
+                          f"{elapsed:.1f}s this call ({n_chunks} chunk(s)), {per_gen_ms:.1f} ms/gen", flush=True)
+
+                    if do_push:
+                        threshold = (completed_count // args.checkpoint_every) * args.checkpoint_every
+                        if threshold > last_checkpoint:
+                            message = (
+                                f"Opponent-count precision sweep (chunked): {completed_count}/{len(units)} units complete "
+                                f"(batch: {sorted(batch_since_checkpoint)})"
+                            )
+                            commit_and_push(paths_since_checkpoint, message)
+                            last_checkpoint = threshold
+                            batch_since_checkpoint = []
+                            paths_since_checkpoint = []
+
+                futures = {f: futures[f] for f in not_done}
+
+                if push_checkpoints and (time.time() - last_checkpoint_poll) >= args.checkpoint_poll_seconds:
+                    ckpt_files = sorted(out_root.glob("k*/seed_*_checkpoint.pkl"))
+                    if ckpt_files:
+                        push_checkpoint_snapshot_to_scratch_branch(
+                            ckpt_files,
+                            f"Opponent-count precision sweep (chunked): periodic checkpoint snapshot "
+                            f"({len(ckpt_files)} in-progress seed(s))",
                         )
-                        commit_and_push(paths_since_checkpoint, message)
-                        last_checkpoint = threshold
-                        batch_since_checkpoint = []
-                        paths_since_checkpoint = []
+                    last_checkpoint_poll = time.time()
 
-            futures = {f: futures[f] for f in not_done}
+                if status_interval > 0 and (time.time() - last_status_push) >= status_interval:
+                    write_status_json(status_path, out_root, k_values, seeds, generations)
+                    commit_and_push([status_path], f"Progress snapshot: {completed_count}/{len(units)} units done")
+                    last_status_push = time.time()
 
-            if do_push and (time.time() - last_checkpoint_poll) >= args.checkpoint_poll_seconds:
-                ckpt_files = sorted(out_root.glob("k*/seed_*_checkpoint.pkl"))
-                if ckpt_files:
-                    push_checkpoint_snapshot_to_scratch_branch(
-                        ckpt_files,
-                        f"Opponent-count precision sweep (chunked): periodic checkpoint snapshot "
-                        f"({len(ckpt_files)} in-progress seed(s))",
-                    )
-                last_checkpoint_poll = time.time()
+        if do_push and batch_since_checkpoint:
+            message = (
+                f"Opponent-count precision sweep (chunked): {completed_count}/{len(units)} units complete "
+                f"(final partial batch: {sorted(batch_since_checkpoint)})"
+            )
+            commit_and_push(paths_since_checkpoint, message)
 
-    if do_push and batch_since_checkpoint:
-        message = (
-            f"Opponent-count precision sweep (chunked): {completed_count}/{len(units)} units complete "
-            f"(final partial batch: {sorted(batch_since_checkpoint)})"
-        )
-        commit_and_push(paths_since_checkpoint, message)
+        if status_interval > 0:
+            write_status_json(status_path, out_root, k_values, seeds, generations)
+            commit_and_push([status_path], f"Progress snapshot: {completed_count}/{len(units)} units done (final)")
 
-    print(f"\nAll {completed_count}/{len(units)} units complete in {time.time() - t_start:.1f}s wall-clock.",
-          flush=True)
+        print(f"\nAll {completed_count}/{len(units)} units complete in {time.time() - t_start:.1f}s wall-clock.",
+              flush=True)
+    finally:
+        release_lock(lock_path)
 
 
 if __name__ == "__main__":
