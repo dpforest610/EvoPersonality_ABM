@@ -38,6 +38,7 @@ Usage:
 
 import argparse
 import csv
+import ctypes
 import json
 import os
 import pickle
@@ -95,6 +96,40 @@ def lock_path_for(out_root: Path) -> Path:
     return out_root / ".run.lock"
 
 
+def _pid_is_alive(pid: int) -> bool:
+    """Cross-platform liveness check, used only to decide whether a lock
+    file is stale. On POSIX, os.kill(pid, 0) sends no actual signal -- it
+    just probes whether the pid exists. On Windows, os.kill does NOT have
+    that "signal 0" special case: any signal value Windows doesn't treat as
+    CTRL_C_EVENT/CTRL_BREAK_EVENT is implemented via TerminateProcess(), so
+    calling os.kill(pid, 0) there would actually kill a live process -- the
+    opposite of a safe probe. So on Windows this instead uses OpenProcess +
+    GetExitCodeProcess via ctypes, which only queries state and can't
+    terminate anything."""
+    if os.name == "nt":
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        STILL_ACTIVE = 259
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not handle:
+            return False
+        try:
+            exit_code = ctypes.c_ulong()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+                return False
+            return exit_code.value == STILL_ACTIVE
+        finally:
+            kernel32.CloseHandle(handle)
+    else:
+        try:
+            os.kill(pid, 0)
+            return True
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True  # exists under another user -- assume it's real
+
+
 def acquire_lock(out_root: Path) -> Path:
     """Refuses to start a second instance against the same out_root while
     one is already running (e.g. the user double-clicking the start script,
@@ -109,15 +144,7 @@ def acquire_lock(out_root: Path) -> Path:
             old_pid = int(lock_path.read_text().strip())
         except (ValueError, OSError):
             pass
-        alive = False
-        if old_pid is not None:
-            try:
-                os.kill(old_pid, 0)
-                alive = True
-            except ProcessLookupError:
-                alive = False
-            except PermissionError:
-                alive = True  # exists under another user -- assume it's real
+        alive = old_pid is not None and _pid_is_alive(old_pid)
         if alive:
             print(
                 f"Another run (pid {old_pid}) already holds the lock at {lock_path}.\n"
@@ -134,6 +161,29 @@ def acquire_lock(out_root: Path) -> Path:
 
 def release_lock(lock_path: Path) -> None:
     lock_path.unlink(missing_ok=True)
+
+
+_ES_CONTINUOUS = 0x80000000
+_ES_SYSTEM_REQUIRED = 0x00000001
+
+
+def prevent_sleep_windows() -> None:
+    """Windows has no equivalent of macOS's `caffeinate` wrapper command, so
+    this does the same job from inside the process via the Win32
+    SetThreadExecutionState API: it tells Windows this thread needs the
+    system to stay awake, without touching the display-sleep timer (we only
+    care about the machine not suspending, not the screen staying on). A
+    no-op on every other OS."""
+    if os.name == "nt":
+        ctypes.windll.kernel32.SetThreadExecutionState(_ES_CONTINUOUS | _ES_SYSTEM_REQUIRED)
+
+
+def allow_sleep_windows() -> None:
+    """Undoes prevent_sleep_windows() -- must be called when the run ends
+    (including on a crash) or Windows would stay awake-pinned until the
+    process holding that flag exits anyway. A no-op on every other OS."""
+    if os.name == "nt":
+        ctypes.windll.kernel32.SetThreadExecutionState(_ES_CONTINUOUS)
 
 
 def run_one_seed_chunked(k: int, seed: int, generations: int, chunk_size: int, out_root_str: str):
@@ -268,7 +318,11 @@ def _git(*args: str) -> subprocess.CompletedProcess:
 
 
 def commit_and_push(paths: List[Path], message: str) -> None:
-    add = _git("add", *[str(p) for p in paths])
+    # as_posix() rather than str(): on Windows, str(WindowsPath(...)) renders
+    # with backslashes, but git always accepts (and internally normalizes
+    # to) forward slashes regardless of platform -- using it unconditionally
+    # here is simpler and safer than branching on os.name.
+    add = _git("add", *[p.as_posix() for p in paths])
     if add.returncode != 0:
         print(f"git add failed for {message}: {add.stderr.strip()}", flush=True)
         return
@@ -318,7 +372,7 @@ def push_checkpoint_snapshot_to_scratch_branch(
     with tempfile.TemporaryDirectory() as tmpdir:
         env = dict(os.environ)
         env["GIT_INDEX_FILE"] = os.path.join(tmpdir, "index")
-        rel_paths = [str(p.resolve().relative_to(REPO_ROOT)) for p in paths]
+        rel_paths = [p.resolve().relative_to(REPO_ROOT).as_posix() for p in paths]
 
         add = subprocess.run(
             ["git", "add", "-f", "--", *rel_paths],
@@ -405,6 +459,7 @@ def main():
     status_path = REPO_ROOT / status_path_for(out_root)
 
     lock_path = acquire_lock(out_root)
+    prevent_sleep_windows()
     try:
         units = [(k, seed) for k in k_values for seed in seeds]
         for k in k_values:
@@ -496,6 +551,7 @@ def main():
         print(f"\nAll {completed_count}/{len(units)} units complete in {time.time() - t_start:.1f}s wall-clock.",
               flush=True)
     finally:
+        allow_sleep_windows()
         release_lock(lock_path)
 
 
