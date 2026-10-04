@@ -9,7 +9,15 @@ Usage:
 
 import argparse
 import pickle
+import sys
 from pathlib import Path
+
+# Unpickling a checkpoint needs to import evopersonality_abm (the genomes
+# inside are instances of its classes) -- without this, pickle.load() fails
+# with "No module named 'evopersonality_abm'" the moment any in-progress
+# checkpoint is read, since running `python3 scripts/check_progress.py`
+# only puts scripts/ on sys.path, not the repo root.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 DEFAULT_OUT_ROOT = Path("scripts/output/opponent_count_precision_sweep")
 DEFAULT_K_VALUES = [4, 6, 8, 12, 16, 24, 32, 40, 50, 64, 80, 99]
