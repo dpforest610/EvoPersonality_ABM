@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-05T17:27:05+00:00",
+  "updated_at": "2026-10-05T18:27:50+00:00",
   "generations_per_seed": 5000,
   "by_k": {
     "99": {
@@ -13,39 +13,39 @@
       "in_progress": [
         {
           "seed": 41,
-          "next_generation": 3500
+          "next_generation": 4500
         },
         {
           "seed": 42,
-          "next_generation": 3000
+          "next_generation": 4000
         },
         {
           "seed": 43,
-          "next_generation": 2500
+          "next_generation": 3500
         },
         {
           "seed": 44,
-          "next_generation": 2500
+          "next_generation": 3500
         },
         {
           "seed": 45,
-          "next_generation": 2500
+          "next_generation": 3500
         },
         {
           "seed": 46,
-          "next_generation": 2500
+          "next_generation": 3500
         },
         {
           "seed": 47,
-          "next_generation": 2500
+          "next_generation": 3500
         },
         {
           "seed": 48,
-          "next_generation": 2000
+          "next_generation": 2500
         },
         {
           "seed": 49,
-          "next_generation": 2000
+          "next_generation": 2500
         }
       ]
     },
@@ -55,27 +55,27 @@
       "in_progress": [
         {
           "seed": 0,
-          "next_generation": 1500
+          "next_generation": 2000
         },
         {
           "seed": 1,
-          "next_generation": 1500
+          "next_generation": 2000
         },
         {
           "seed": 2,
-          "next_generation": 1500
+          "next_generation": 2000
         },
         {
           "seed": 3,
-          "next_generation": 500
+          "next_generation": 1500
         },
         {
           "seed": 4,
-          "next_generation": 500
+          "next_generation": 1500
         },
         {
           "seed": 5,
-          "next_generation": 500
+          "next_generation": 1500
         }
       ]
     }
