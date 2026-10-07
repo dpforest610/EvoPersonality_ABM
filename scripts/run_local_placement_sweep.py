@@ -1,26 +1,33 @@
-"""Local-placement experiment runner (placement="local"), chunked/
-checkpointed -- same engine (chunking, checkpoint resume, lock file,
-Windows sleep-suppression, periodic git push) as
-run_opponent_count_precision_sweep_chunked.py, adapted for this
-different research question and output directory.
+"""Local-placement experiment runner, chunked/checkpointed -- same engine
+(chunking, checkpoint resume, lock file, Windows sleep-suppression,
+periodic git push) as run_opponent_count_precision_sweep_chunked.py,
+adapted for this different research question and output directory.
 
-Only placement="local" is run here. placement="shuffle" comparison data
-already exists for k=4,8,16,32 in scripts/output/opponent_count_
-precision_sweep/ (the original precision k-sweep, same seeds 0-49, same
-PARAMS), so it is reused rather than re-simulated.
+Runs --placement local (the real experiment) or --placement shuffle (a
+from-scratch replay of the original precision k-sweep's shuffle
+condition, but with the new per-generation instrumentation it never
+recorded -- opponent identity, cooperation, assortativity -- needed for
+the context analysis and environment table). Both write per-agent
+opponent_mean_k_self/opponent_mean_k_out columns (mean of this
+generation's actual duel partners) into individual_log.csv, alongside
+the existing k_out/k_self/memory_depth/payoff columns.
 
-Output: scripts/output/local_placement_sweep/k{k}/seed_{s}_timeseries.csv
-(per-generation aggregates, including the new cooperation_rate/
-k_out_assortativity/k_self_assortativity/same_parent_fraction columns)
-and seed_{s}_individual_log.csv (per-agent, every 100 gen, unchanged
-schema from the precision sweep).
+local writes to scripts/output/local_placement_sweep/; shuffle (non-
+pilot) writes to scripts/output/local_placement_sweep_shuffle_replay/
+-- kept apart from both local's data and the ORIGINAL precision-sweep
+CSVs (scripts/output/opponent_count_precision_sweep/, different schema,
+no context columns) that the replay is meant to reproduce numerically.
+See docs/PREREGISTRATION_local_placement.md for why both conditions are
+re-run and the full analysis plan.
 
 Usage:
     # pilot (short, cloud): k=8, 10 seeds, 1000 gens
     python3 scripts/run_local_placement_sweep.py --pilot
+    python3 scripts/run_local_placement_sweep.py --pilot --placement shuffle
 
     # production: k=8,4,16,32 (priority order), 50 seeds, 5000 gens
-    python3 scripts/run_local_placement_sweep.py
+    python3 scripts/run_local_placement_sweep.py --placement local
+    python3 scripts/run_local_placement_sweep.py --placement shuffle
 """
 
 import argparse
@@ -45,6 +52,7 @@ sys.path.insert(0, str(REPO_ROOT))
 from evopersonality_abm.spatial import run_coupled_evolution_opponent_count
 
 OUT_ROOT = Path("scripts/output/local_placement_sweep")
+SHUFFLE_OUT_ROOT = Path("scripts/output/local_placement_sweep_shuffle_replay")
 K_VALUES = [8, 4, 16, 32]  # priority order, matches existing shuffle-condition k's
 SEEDS = list(range(50))
 GENERATIONS = 5000
@@ -64,7 +72,7 @@ PARAMS = dict(
 )
 
 AggRow = Tuple[int, float, float, float, float, float, float, float, float, float]
-IndividualRow = Tuple[int, int, float, float, int, float]
+IndividualRow = Tuple[int, int, float, float, int, float, float, float]
 
 
 def agg_path_for(out_root, k, seed):
@@ -207,7 +215,8 @@ def run_one_seed_chunked(k: int, seed: int, generations: int, chunk_size: int, o
             if s.generation % LOG_INTERVAL == 0:
                 for i in range(len(s.k_out)):
                     individual_rows.append(
-                        (s.generation, i, s.k_out[i], s.k_self[i], s.memory_depths[i], s.payoffs[i])
+                        (s.generation, i, s.k_out[i], s.k_self[i], s.memory_depths[i], s.payoffs[i],
+                         s.opponent_mean_k_self[i], s.opponent_mean_k_out[i])
                     )
         next_gen = chunk_end
         n_chunks_this_call += 1
@@ -246,9 +255,11 @@ def write_agg_csv(path: Path, rows: List[AggRow]) -> None:
 def write_individual_csv(path: Path, rows: List[IndividualRow]) -> None:
     with open(path, "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["generation", "agent_index", "k_out", "k_self", "memory_depth", "payoff"])
-        for gen, idx, k_out, k_self, depth, payoff in rows:
-            w.writerow([gen, idx, f"{k_out:.6f}", f"{k_self:.6f}", depth, f"{payoff:.6f}"])
+        w.writerow(["generation", "agent_index", "k_out", "k_self", "memory_depth", "payoff",
+                     "opponent_mean_k_self", "opponent_mean_k_out"])
+        for gen, idx, k_out, k_self, depth, payoff, opp_kself, opp_kout in rows:
+            w.writerow([gen, idx, f"{k_out:.6f}", f"{k_self:.6f}", depth, f"{payoff:.6f}",
+                        f"{opp_kself:.6f}", f"{opp_kout:.6f}"])
 
 
 def status_path_for(out_root: Path) -> Path:
@@ -398,9 +409,9 @@ def parse_args():
     p.add_argument("--pilot", action="store_true",
                    help="k=8 only, 10 seeds, 1000 gens, chunk-size 250, no push, separate out-dir")
     p.add_argument("--placement", choices=["local", "shuffle"], default="local",
-                   help="shuffle is only for an apples-to-apples pilot-scale operational-check "
-                        "comparison -- production shuffle-condition data already exists in the "
-                        "main precision sweep, so this is not meant for production use")
+                   help="local is the real experiment; shuffle re-runs the original precision "
+                        "sweep's shuffle condition with the new context/cooperation "
+                        "instrumentation, writing to a separate directory (see module docstring)")
     return p.parse_args()
 
 
@@ -416,21 +427,17 @@ def main():
         out_root = Path(str(OUT_ROOT) + suffix)
         do_push = False
     else:
-        if args.placement != "local":
-            print(
-                "[ERROR] --placement shuffle is only for the pilot-scale operational-check "
-                "comparison (use it together with --pilot). Production shuffle-condition data "
-                "already exists in the main precision sweep -- running shuffle here outside "
-                "--pilot would write into the same output directory as the real local-placement "
-                "production run and overwrite/mix with it.",
-                file=sys.stderr,
-            )
-            sys.exit(1)
         k_values = [int(x) for x in args.k_values.split(",") if x.strip()]
         seeds = list(range(args.n_seeds))
         generations = args.generations
         chunk_size = args.chunk_size
-        out_root = OUT_ROOT
+        # local and shuffle production write to separate directories: local
+        # is the real experiment; shuffle here is a from-scratch replay (with
+        # the new per-generation instrumentation the original precision
+        # sweep didn't record -- opponent identity, cooperation, etc.) kept
+        # apart from both the local-placement data and the original
+        # precision-sweep CSVs (different schema) it's meant to reproduce.
+        out_root = OUT_ROOT if args.placement == "local" else SHUFFLE_OUT_ROOT
         do_push = not args.no_push
 
     push_checkpoints = do_push and args.push_checkpoints

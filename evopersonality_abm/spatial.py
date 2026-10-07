@@ -443,6 +443,31 @@ class LocalPlacementGenerationStats(CoupledGenerationStats):
     avoid the extra memory/copy cost for callers (like the main
     production sweep) that only need the scalar same_parent_fraction."""
 
+    opponent_mean_k_self: Optional[List[float]] = None
+    opponent_mean_k_out: Optional[List[float]] = None
+    """Per-individual mean K_self/K_out of this generation's ACTUAL duel
+    partners (from `edges`), for the Heisler & Damuth (1987) context
+    analysis: own-trait-only Lande-Arnold regression confounds a
+    partner's trait effect into one's own beta whenever partners are
+    correlated with self (as placement="local" deliberately makes them),
+    so the context regression needs each individual's realized opponent
+    mean as a separate predictor. Computed identically for both
+    placement modes -- for "shuffle" this is the realized mean of a
+    freshly-random k-neighbor draw each generation, not a population
+    average. NaN for an individual with no edges this generation (only
+    possible if k >= population_size, i.e. never in practice here)."""
+
+
+def _opponent_means(values: Sequence[float], edges: Sequence[Tuple[int, int]], population_size: int) -> List[float]:
+    sums = [0.0] * population_size
+    counts = [0] * population_size
+    for i, j in edges:
+        sums[i] += values[j]
+        counts[i] += 1
+        sums[j] += values[i]
+        counts[j] += 1
+    return [sums[i] / counts[i] if counts[i] > 0 else float("nan") for i in range(population_size)]
+
 
 def _edge_assortativity(values: Sequence[float], edges: Sequence[Tuple[int, int]]) -> float:
     if len(edges) < 2:
@@ -690,6 +715,8 @@ def run_coupled_evolution_opponent_count(
                 k_self_assortativity=_edge_assortativity(k_self_vals, edges),
                 same_parent_fraction=same_parent_fraction,
                 parent_of=list(parent_of) if record_parent_history else None,
+                opponent_mean_k_self=_opponent_means(k_self_vals, edges, population_size),
+                opponent_mean_k_out=_opponent_means(k_out_vals, edges, population_size),
             )
         )
 

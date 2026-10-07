@@ -431,3 +431,45 @@ def test_opponent_count_local_placement_chunked_resume_is_bit_identical():
         assert a.k_out_assortativity == b.k_out_assortativity or (
             a.k_out_assortativity != a.k_out_assortativity and b.k_out_assortativity != b.k_out_assortativity
         )
+
+
+def test_opponent_mean_k_matches_manual_computation_for_a_tiny_ring():
+    """k=2 ring (fixed order, placement="local") is simple enough to hand-
+    verify: each agent's two neighbors are its array-adjacent indices, so
+    opponent_mean_k_out[i] should be the mean of k_out at i-1 and i+1."""
+    stats = run_coupled_evolution_opponent_count(
+        population_size=8, generations=1, rounds_per_duel=2, k=2, seed=3, placement="local",
+    )
+    s = stats[0]
+    for i in range(8):
+        expected = (s.k_out[(i - 1) % 8] + s.k_out[(i + 1) % 8]) / 2
+        assert s.opponent_mean_k_out[i] == pytest.approx(expected)
+        expected_self = (s.k_self[(i - 1) % 8] + s.k_self[(i + 1) % 8]) / 2
+        assert s.opponent_mean_k_self[i] == pytest.approx(expected_self)
+
+
+def test_opponent_mean_k_populated_for_shuffle_too():
+    stats = run_coupled_evolution_opponent_count(
+        population_size=20, generations=3, rounds_per_duel=4, k=4, seed=0, placement="shuffle",
+    )
+    for s in stats:
+        assert len(s.opponent_mean_k_out) == 20
+        assert all(not (v != v) for v in s.opponent_mean_k_out)  # no NaNs (k=4 < population_size)
+
+
+def test_opponent_count_shuffle_still_matches_golden_reference_with_context_fields():
+    """Guards against the opponent-context addition (opponent_mean_k_self/
+    opponent_mean_k_out) accidentally perturbing placement="shuffle"'s core
+    output -- re-checks the same golden reference used above, this time
+    also confirming the new per-agent context fields are populated and
+    finite for every agent (sanity, not a value check: there's no
+    independently-computed reference for these yet)."""
+    stats = run_coupled_evolution_opponent_count(
+        population_size=6, generations=4, rounds_per_duel=2, k=2, seed=7, placement="shuffle",
+    )
+    actual = [(s.generation, s.k_out, s.k_self, s.memory_depths, s.payoffs) for s in stats]
+    assert actual == _GOLDEN_SHUFFLE_REFERENCE
+    for s in stats:
+        assert len(s.opponent_mean_k_out) == 6
+        assert len(s.opponent_mean_k_self) == 6
+        assert all(v == v for v in s.opponent_mean_k_out)  # no NaNs
