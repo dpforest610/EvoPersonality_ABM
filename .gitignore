@@ -9,6 +9,8 @@ scripts/output/selection_vs_drift_sweep_smoke/
 scripts/output/selection_vs_drift_sweep_with_depth_smoke/
 scripts/output/selection_partial_correlation_smoke/
 scripts/output/opponent_count_precision_sweep_smoke/
+scripts/output/local_placement_sweep_pilot/
+scripts/output/local_placement_sweep_pilot_shuffle/
 scripts/output/**/*_checkpoint.pkl
 scripts/output/**/.run.lock
 venv/

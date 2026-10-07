@@ -436,6 +436,12 @@ class LocalPlacementGenerationStats(CoupledGenerationStats):
     k_out_assortativity: float = float("nan")
     k_self_assortativity: float = float("nan")
     same_parent_fraction: float = float("nan")
+    parent_of: Optional[List[Optional[int]]] = None
+    """This generation's per-individual immediate-parent array (old ring
+    index of the parent that produced each current individual), only
+    populated when record_parent_history=True -- None otherwise, to
+    avoid the extra memory/copy cost for callers (like the main
+    production sweep) that only need the scalar same_parent_fraction."""
 
 
 def _edge_assortativity(values: Sequence[float], edges: Sequence[Tuple[int, int]]) -> float:
@@ -547,6 +553,7 @@ def run_coupled_evolution_opponent_count(
     rng_ring_state=None,
     parent_of_state: Optional[List[Optional[int]]] = None,
     track_parent_state: bool = False,
+    record_parent_history: bool = False,
     return_state: bool = False,
 ):
     """Pure "opponent count" sweep, stripped of 2D grid geometry -- see
@@ -682,6 +689,7 @@ def run_coupled_evolution_opponent_count(
                 k_out_assortativity=_edge_assortativity(k_out_vals, edges),
                 k_self_assortativity=_edge_assortativity(k_self_vals, edges),
                 same_parent_fraction=same_parent_fraction,
+                parent_of=list(parent_of) if record_parent_history else None,
             )
         )
 
