@@ -7,6 +7,8 @@ from evopersonality_abm.spatial import (
     SpatialGenerationStats,
     _mean_neighbor_payoff,
     _softmax_sample,
+    fixed_ring_duel_edges,
+    local_placement_order,
     place_on_grid,
     ring_duel_edges,
     run_coupled_evolution_opponent_count,
@@ -303,3 +305,129 @@ def test_run_coupled_evolution_opponent_count_k_equals_full_matches_scale():
     # no such field), but a full run without error at k=n-1 is itself the
     # contract being tested (ring_duel_edges' own test covers the count).
     assert len(stats[0].payoffs) == 12
+
+
+_GOLDEN_SHUFFLE_REFERENCE = [
+    (0, [0.5827880059033551, 0.24066300012702502, 0.9762551055929201, 0.5602572770128127, 0.6190095931735539, 0.24842658485754932],
+     [0.9097040631431023, 0.5510472537913857, 0.04658268061775628, 0.6820026947612046, 0.4964144951134918, 0.1797667495831432],
+     [1, 1, 1, 1, 1, 1], [2.5, 2.5, 2.5, 1.5, 3.25, 3.25]),
+    (1, [0.6253850508861982, 0.9930375973444486, 0.5494372077432812, 0.6154673602961022, 0.20150078372901792, 0.6716996083558234],
+     [0.9693511413356708, 0.08365415359229192, 0.705526990629568, 0.44130185759200413, 0.16143544528871137, 0.630997918162999],
+     [1, 2, 1, 1, 1, 1], [3.25, 1.0, 1.5, 4.5, 1.25, 3.5]),
+    (2, [0.5791954253458513, 0.6919273211806282, 0.48104944311727194, 0.5754938198885912, 0.1935130724040553, 0.7750534438623987],
+     [0.41311567596478194, 0.6277309426077391, 0.9851452334102603, 0.5009179460658212, 0.12906783332322613, 0.6936650873512837],
+     [1, 1, 1, 0, 1, 1], [2.0, 1.75, 1.5, 3.0, 0.5, 1.0]),
+    (3, [0.6097240650832012, 0.5641392035783495, 0.6464966850564083, 0.6001896606540319, 0.6570521087720989, 0.43193443671177406],
+     [0.4245032287240657, 0.5044364066246965, 0.4017442280949224, 0.35741016657128793, 0.4203545191047164, 1.0],
+     [1, 0, 1, 1, 0, 1], [1.75, 1.75, 2.75, 2.75, 1.5, 1.5]),
+]
+
+
+def test_opponent_count_placement_shuffle_matches_golden_reference():
+    """placement="shuffle" (the default) must stay byte-for-byte identical
+    to the implementation as it existed before the placement parameter
+    (and the cooperation/assortativity/same-parent-fraction tracking) was
+    added. Reference values captured from the pre-change implementation
+    at commit 8faede1 -- adding "local" placement must not perturb
+    "shuffle" in any way, since both read from the same rng in the same
+    order and the only thing placement should change is how offspring
+    are laid out afterward (an identity no-op for "shuffle")."""
+    for placement in (None, "shuffle"):
+        kwargs = dict(population_size=6, generations=4, rounds_per_duel=2, k=2, seed=7)
+        if placement is not None:
+            kwargs["placement"] = placement
+        stats = run_coupled_evolution_opponent_count(**kwargs)
+        actual = [(s.generation, s.k_out, s.k_self, s.memory_depths, s.payoffs) for s in stats]
+        assert actual == _GOLDEN_SHUFFLE_REFERENCE
+
+
+def test_local_placement_order_groups_siblings_contiguously():
+    # parents 0,2,2,0,3,1 (old ring positions) produced these 6 offspring
+    # (selection slots 0..5); expect: block for parent 0 (slots 0,3), then
+    # parent 1 (slot 5), then parent 2 (slots 1,2), then parent 3 (slot 4) --
+    # scanned in OLD ring-position order 0,1,2,3, packed with no gaps.
+    parent_indices = [0, 2, 2, 0, 3, 1]
+    order = local_placement_order(parent_indices, population_size=6)
+    assert order == [0, 3, 5, 1, 2, 4]
+    # every contiguous run in `order` maps to selection slots sharing one parent
+    parents_in_new_order = [parent_indices[slot] for slot in order]
+    assert parents_in_new_order == [0, 0, 1, 2, 2, 3]
+
+
+def test_fixed_ring_duel_edges_each_agent_has_exactly_k_neighbors():
+    for k in (2, 4, 8):
+        edges = fixed_ring_duel_edges(20, k)
+        degree = {i: 0 for i in range(20)}
+        for i, j in edges:
+            assert i != j
+            degree[i] += 1
+            degree[j] += 1
+        assert all(d == k for d in degree.values())
+
+
+def test_fixed_ring_duel_edges_connects_array_adjacent_indices_only():
+    # k=2: each agent's only neighbors should be its immediate array
+    # neighbors (i-1, i+1 mod n) -- no shuffling, unlike ring_duel_edges.
+    edges = set(fixed_ring_duel_edges(5, 2))
+    expected = {(0, 1), (1, 2), (2, 3), (3, 4), (0, 4)}
+    assert edges == expected
+
+
+def test_local_placement_increases_same_parent_duel_fraction():
+    """Operational check, at small scale: local placement should make
+    actually-dueled pairs share a parent (and be similar in K_out) much
+    more often than shuffle's near-baseline rate."""
+    common = dict(population_size=30, rounds_per_duel=3, k=6, seed=11, generations=15)
+    stats_shuffle = run_coupled_evolution_opponent_count(placement="shuffle", **common)
+    stats_local = run_coupled_evolution_opponent_count(placement="local", **common)
+
+    shuffle_rate = statistics_mean(
+        s.same_parent_fraction for s in stats_shuffle[1:] if s.same_parent_fraction == s.same_parent_fraction
+    )
+    local_rate = statistics_mean(
+        s.same_parent_fraction for s in stats_local[1:] if s.same_parent_fraction == s.same_parent_fraction
+    )
+    assert local_rate > shuffle_rate
+
+
+def statistics_mean(values):
+    values = list(values)
+    return sum(values) / len(values)
+
+
+def test_opponent_count_local_placement_chunked_resume_is_bit_identical():
+    """Same bit-exact chunked-resume guarantee as the existing shuffle
+    test, but for placement="local" -- must also thread parent_of_state
+    through (track_parent_state=True) since same_parent_fraction for the
+    first post-resume generation depends on knowing the prior
+    generation's parent assignments."""
+    common_kwargs = dict(population_size=20, rounds_per_duel=4, k=6, seed=42, placement="local")
+
+    uninterrupted = run_coupled_evolution_opponent_count(generations=40, **common_kwargs)
+
+    first_half, genomes, rng_state, rng_ring_state, parent_of = run_coupled_evolution_opponent_count(
+        generations=20, return_state=True, track_parent_state=True, **common_kwargs
+    )
+    second_half = run_coupled_evolution_opponent_count(
+        generations=40,
+        start_generation=20,
+        initial_genomes=genomes,
+        rng_state=rng_state,
+        rng_ring_state=rng_ring_state,
+        parent_of_state=parent_of,
+        **common_kwargs,
+    )
+    resumed = first_half + second_half
+
+    assert len(uninterrupted) == len(resumed) == 40
+    assert _stats_to_comparable(uninterrupted) == _stats_to_comparable(resumed)
+    # the new fields must match too, including same_parent_fraction across
+    # the resume boundary (generation 20) -- the real risk spot, since it
+    # needs parent_of_state to be carried over correctly.
+    for a, b in zip(uninterrupted, resumed):
+        assert a.same_parent_fraction == b.same_parent_fraction or (
+            a.same_parent_fraction != a.same_parent_fraction and b.same_parent_fraction != b.same_parent_fraction
+        )  # NaN != NaN, so compare "is NaN" on both sides instead
+        assert a.k_out_assortativity == b.k_out_assortativity or (
+            a.k_out_assortativity != a.k_out_assortativity and b.k_out_assortativity != b.k_out_assortativity
+        )

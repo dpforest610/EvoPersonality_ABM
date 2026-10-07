@@ -30,6 +30,7 @@ untouched by this module.
 
 import math
 import random
+import statistics
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Tuple
@@ -407,6 +408,90 @@ def run_coupled_evolution_spatial_persistent(
     return stats
 
 
+@dataclass
+class LocalPlacementGenerationStats(CoupledGenerationStats):
+    """CoupledGenerationStats plus the operational-check/presentation
+    fields the placement="local" experiment (and its "shuffle" baseline,
+    for comparison) needs:
+
+    - cooperation_rate: population mean fraction of COOPERATE actions
+      this generation, pooled across all duels.
+    - k_out_assortativity / k_self_assortativity: Pearson correlation of
+      the two endpoints' K_out/K_self values, taken over all ACTUALLY-
+      DUELED pairs this generation -- a simplified Moran's-I-like /
+      network-assortativity measure of "do individuals who duel each
+      other tend to be similar". NaN if there are fewer than 2 edges or
+      the values are constant (no variance to correlate).
+    - same_parent_fraction: share of duel edges whose two endpoints
+      share this generation's immediate parent (from the most recent
+      reproduction step). NaN at generation 0 (nothing has reproduced
+      yet) or if there are no edges.
+
+    All four are computed identically regardless of placement, so they
+    are the direct operational check for whether actually-dueled pairs
+    are more similar / more often siblings under "local" than
+    "shuffle"."""
+
+    cooperation_rate: float = float("nan")
+    k_out_assortativity: float = float("nan")
+    k_self_assortativity: float = float("nan")
+    same_parent_fraction: float = float("nan")
+
+
+def _edge_assortativity(values: Sequence[float], edges: Sequence[Tuple[int, int]]) -> float:
+    if len(edges) < 2:
+        return float("nan")
+    x = [values[i] for i, j in edges]
+    y = [values[j] for i, j in edges]
+    if len(set(x)) < 2 or len(set(y)) < 2:
+        return float("nan")
+    return statistics.correlation(x, y)
+
+
+def fixed_ring_duel_edges(population_size: int, k: int) -> List[Tuple[int, int]]:
+    """Same k-nearest-neighbor connection rule as ring_duel_edges, but
+    using the array's own index order as the ring directly, with no
+    per-generation reshuffle -- for placement="local", where array index
+    IS the lineage-persistent ring position produced by
+    local_placement_order. No rng is needed since nothing is randomized
+    here."""
+    if k < 1 or k > population_size - 1:
+        raise ValueError(f"k={k} must be in [1, {population_size - 1}]")
+    if k % 2 == 1 and k != population_size - 1:
+        raise NotImplementedError(
+            f"fixed_ring_duel_edges only supports odd k when k == population_size - 1 "
+            f"(complete graph); k={k} is not exactly k-regular with this construction"
+        )
+    half_before = k // 2
+    half_after = k - half_before
+    offsets = list(range(1, half_after + 1)) + list(range(-half_before, 0))
+    edges = set()
+    for i in range(population_size):
+        for offset in offsets:
+            j = (i + offset) % population_size
+            edges.add((min(i, j), max(i, j)))
+    return list(edges)
+
+
+def local_placement_order(parent_indices: Sequence[int], population_size: int) -> List[int]:
+    """Returns a permutation `order` of selection-slot indices such that
+    offspring sharing the same parent end up ring-adjacent ("blocks"),
+    blocks ordered by the parent's position on the OLD ring (0 ..
+    population_size-1); a parent with no offspring simply contributes no
+    block (no gap left behind, blocks are packed). order[p] = the
+    original selection-slot index of the offspring placed at new ring
+    position p. Scanning old ring positions starting at 0 is one valid
+    rotation of the ring (any starting point works equally, since it's a
+    ring) -- see run_coupled_evolution_opponent_count's docstring."""
+    by_parent: Dict[int, List[int]] = defaultdict(list)
+    for selection_slot, parent_idx in enumerate(parent_indices):
+        by_parent[parent_idx].append(selection_slot)
+    order: List[int] = []
+    for old_ring_pos in range(population_size):
+        order.extend(by_parent.get(old_ring_pos, []))
+    return order
+
+
 def ring_duel_edges(population_size: int, k: int, rng: random.Random) -> List[Tuple[int, int]]:
     """A fresh random circular ordering ("ring") of all agents, each
     agent duels its k nearest ring-neighbors (roughly half on each side;
@@ -455,10 +540,13 @@ def run_coupled_evolution_opponent_count(
     noise_std: float = 0.05,
     seed: Optional[int] = None,
     k: int = 8,
+    placement: str = "shuffle",
     start_generation: int = 0,
     initial_genomes=None,
     rng_state=None,
     rng_ring_state=None,
+    parent_of_state: Optional[List[Optional[int]]] = None,
+    track_parent_state: bool = False,
     return_state: bool = False,
 ):
     """Pure "opponent count" sweep, stripped of 2D grid geometry -- see
@@ -482,6 +570,34 @@ def run_coupled_evolution_opponent_count(
     anchor, though chapter 1's own already-collected data is the
     reference point in practice rather than re-simulating this case.
 
+    placement="shuffle" (default) is byte-for-byte the original
+    implementation: every generation, duel-neighbors come from a
+    freshly-shuffled ring (rng_ring), independent of array layout --
+    kept unchanged on purpose and checked against a golden reference
+    captured before this parameter existed (see
+    test_opponent_count_placement_shuffle_matches_golden_reference).
+
+    placement="local" instead makes the array index itself a
+    persistent, lineage-based ring position: each generation's
+    offspring are placed in contiguous blocks by parent (same parent's
+    children end up ring-adjacent), blocks ordered by the parent's OLD
+    ring position (see local_placement_order), and duel-neighbors are
+    this generation's k nearest neighbors in THAT fixed array order --
+    no reshuffle (see fixed_ring_duel_edges). rng_ring is still
+    accepted/threaded through for call-signature symmetry with
+    "shuffle" but is never drawn from when placement="local", so its
+    state does not advance in that mode.
+
+    Both placement modes return LocalPlacementGenerationStats (a
+    CoupledGenerationStats subclass) with four extra fields computed
+    identically for both modes -- cooperation_rate, k_out_assortativity/
+    k_self_assortativity (similarity between ACTUALLY-DUELED pairs), and
+    same_parent_fraction (share of duel edges whose two endpoints share
+    this generation's immediate parent) -- see the dataclass's
+    docstring. These are the operational check for whether "local"
+    actually makes similar individuals duel each other more often than
+    "shuffle" does.
+
     Chunked-checkpoint resume: pass initial_genomes/rng_state/
     rng_ring_state (as returned by a previous call with
     return_state=True) together with start_generation to continue a run
@@ -489,8 +605,17 @@ def run_coupled_evolution_opponent_count(
     captures the full internal generator state, so resuming reproduces
     bit-identical results to an uninterrupted run (verified by test).
     With return_state=True, returns (stats, final_genomes, rng_state,
-    rng_ring_state) instead of just stats, so a caller can checkpoint.
+    rng_ring_state) instead of just stats, so a caller can checkpoint --
+    unless track_parent_state=True, in which case a 5th element
+    (the current population's per-individual immediate-parent array,
+    needed to score the FIRST post-resume generation's
+    same_parent_fraction correctly) is appended. track_parent_state
+    defaults to False so this is purely additive: every existing caller
+    that unpacks the original 4-tuple is unaffected.
     """
+    if placement not in ("shuffle", "local"):
+        raise ValueError(f"placement must be 'shuffle' or 'local', got {placement!r}")
+
     if rng_state is not None and rng_ring_state is not None:
         rng = random.Random()
         rng.setstate(rng_state)
@@ -505,16 +630,28 @@ def run_coupled_evolution_opponent_count(
     else:
         genomes = [random_genome(initial_memory_depth, rng) for _ in range(population_size)]
 
-    stats: List[CoupledGenerationStats] = []
+    parent_of: List[Optional[int]] = (
+        list(parent_of_state) if parent_of_state is not None else [None] * population_size
+    )
+
+    stats: List[LocalPlacementGenerationStats] = []
     for gen in range(start_generation, generations):
-        edges = ring_duel_edges(population_size, k, rng_ring)
+        if placement == "shuffle":
+            edges = ring_duel_edges(population_size, k, rng_ring)
+        else:
+            edges = fixed_ring_duel_edges(population_size, k)
 
         total_payoff = [0.0] * population_size
         rounds_played = [0] * population_size
+        coop_count = [0] * population_size
         for i, j in edges:
-            payoff_i, payoff_j = run_coupled_duel(genomes[i], genomes[j], rounds_per_duel, rng, noise_std)
+            payoff_i, payoff_j, coop_i, coop_j = run_coupled_duel(
+                genomes[i], genomes[j], rounds_per_duel, rng, noise_std, track_cooperation=True
+            )
             total_payoff[i] += payoff_i
             total_payoff[j] += payoff_j
+            coop_count[i] += coop_i
+            coop_count[j] += coop_j
             rounds_played[i] += rounds_per_duel
             rounds_played[j] += rounds_per_duel
 
@@ -523,18 +660,34 @@ def run_coupled_evolution_opponent_count(
             for i in range(population_size)
         ]
 
+        total_rounds = sum(rounds_played)
+        cooperation_rate = sum(coop_count) / total_rounds if total_rounds > 0 else float("nan")
+
+        k_out_vals = [g.k_out for g in genomes]
+        k_self_vals = [g.k_self for g in genomes]
+
+        if any(p is None for p in parent_of) or not edges:
+            same_parent_fraction = float("nan")
+        else:
+            same_parent_fraction = sum(1 for i, j in edges if parent_of[i] == parent_of[j]) / len(edges)
+
         stats.append(
-            CoupledGenerationStats(
+            LocalPlacementGenerationStats(
                 generation=gen,
-                k_out=[g.k_out for g in genomes],
-                k_self=[g.k_self for g in genomes],
+                k_out=k_out_vals,
+                k_self=k_self_vals,
                 memory_depths=[g.table.memory_depth for g in genomes],
                 payoffs=payoffs,
+                cooperation_rate=cooperation_rate,
+                k_out_assortativity=_edge_assortativity(k_out_vals, edges),
+                k_self_assortativity=_edge_assortativity(k_self_vals, edges),
+                same_parent_fraction=same_parent_fraction,
             )
         )
 
-        genomes = select_and_reproduce(genomes, payoffs, rng)
-        genomes = [
+        parent_indices = list(rng.choices(range(population_size), weights=payoffs, k=population_size))
+        selected_genomes = [genomes[idx] for idx in parent_indices]
+        mutated_genomes = [
             mutate_genome(
                 g,
                 rng,
@@ -545,9 +698,17 @@ def run_coupled_evolution_opponent_count(
                 min_memory_depth,
                 k_mutation_std,
             )
-            for g in genomes
+            for g in selected_genomes
         ]
 
+        order = list(range(population_size)) if placement == "shuffle" else local_placement_order(
+            parent_indices, population_size
+        )
+        genomes = [mutated_genomes[slot] for slot in order]
+        parent_of = [parent_indices[slot] for slot in order]
+
     if return_state:
+        if track_parent_state:
+            return stats, genomes, rng.getstate(), rng_ring.getstate(), parent_of
         return stats, genomes, rng.getstate(), rng_ring.getstate()
     return stats

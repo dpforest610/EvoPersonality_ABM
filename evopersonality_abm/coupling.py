@@ -82,10 +82,15 @@ def run_coupled_duel(
     rounds: int,
     rng: random.Random,
     noise_std: float = 0.05,
+    track_cooperation: bool = False,
 ) -> Tuple[float, float]:
     """Iterated PD where each side's action is drawn from its coupled
     internal state rather than read directly off its Lindgren table.
-    Returns (total_payoff_a, total_payoff_b)."""
+    Returns (total_payoff_a, total_payoff_b) by default; with
+    track_cooperation=True, returns a 4-tuple with two more ints appended
+    (cooperate_count_a, cooperate_count_b) -- opt-in and appended rather
+    than inserted, so every existing 2-tuple-unpacking caller is
+    unaffected."""
     history_self_a: List[str] = []
     history_opp_a: List[str] = []
     history_self_b: List[str] = []
@@ -98,6 +103,8 @@ def run_coupled_duel(
 
     total_a = 0.0
     total_b = 0.0
+    coop_count_a = 0
+    coop_count_b = 0
 
     for _ in range(rounds):
         r_a = _BIT_OF_ACTION[genome_a.table.decide(history_self_a, history_opp_a)]
@@ -119,6 +126,10 @@ def run_coupled_duel(
         payoff_a, payoff_b = payoff(action_a, action_b)
         total_a += payoff_a
         total_b += payoff_b
+        if action_a == COOPERATE:
+            coop_count_a += 1
+        if action_b == COOPERATE:
+            coop_count_b += 1
 
         history_self_a.append(action_a)
         history_opp_a.append(action_b)
@@ -126,6 +137,8 @@ def run_coupled_duel(
         history_opp_b.append(action_a)
         last_action_a, last_action_b = action_a, action_b
 
+    if track_cooperation:
+        return total_a, total_b, coop_count_a, coop_count_b
     return total_a, total_b
 
 
