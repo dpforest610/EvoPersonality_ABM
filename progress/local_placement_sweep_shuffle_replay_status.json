@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-08T16:24:11+00:00",
+  "updated_at": "2026-10-08T17:24:53+00:00",
   "generations_per_seed": 5000,
   "by_k": {
     "8": {
@@ -13,60 +13,68 @@
       "in_progress": []
     },
     "16": {
-      "done": 3,
+      "done": 15,
       "total": 50,
       "in_progress": [
         {
-          "seed": 2,
-          "next_generation": 4500
-        },
-        {
-          "seed": 4,
-          "next_generation": 4500
-        },
-        {
-          "seed": 5,
-          "next_generation": 4500
-        },
-        {
-          "seed": 6,
-          "next_generation": 4000
-        },
-        {
-          "seed": 7,
-          "next_generation": 3500
-        },
-        {
-          "seed": 8,
-          "next_generation": 4500
-        },
-        {
-          "seed": 9,
-          "next_generation": 4000
-        },
-        {
-          "seed": 10,
-          "next_generation": 4000
-        },
-        {
-          "seed": 11,
-          "next_generation": 4000
-        },
-        {
-          "seed": 12,
-          "next_generation": 3500
-        },
-        {
-          "seed": 13,
-          "next_generation": 3500
-        },
-        {
-          "seed": 14,
-          "next_generation": 3500
-        },
-        {
           "seed": 15,
-          "next_generation": 500
+          "next_generation": 4000
+        },
+        {
+          "seed": 16,
+          "next_generation": 4000
+        },
+        {
+          "seed": 17,
+          "next_generation": 4000
+        },
+        {
+          "seed": 18,
+          "next_generation": 2500
+        },
+        {
+          "seed": 19,
+          "next_generation": 3000
+        },
+        {
+          "seed": 20,
+          "next_generation": 2500
+        },
+        {
+          "seed": 21,
+          "next_generation": 2500
+        },
+        {
+          "seed": 22,
+          "next_generation": 2500
+        },
+        {
+          "seed": 23,
+          "next_generation": 2500
+        },
+        {
+          "seed": 24,
+          "next_generation": 2500
+        },
+        {
+          "seed": 25,
+          "next_generation": 2500
+        },
+        {
+          "seed": 26,
+          "next_generation": 2000
+        },
+        {
+          "seed": 27,
+          "next_generation": 2500
+        },
+        {
+          "seed": 28,
+          "next_generation": 2000
+        },
+        {
+          "seed": 29,
+          "next_generation": 2000
         }
       ]
     },
