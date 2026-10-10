@@ -1,8 +1,9 @@
 """Conference animation for the scent-movement pilot: agents on the
 13x13 torus grid, color=K_out (viridis, colorblind-safe, with
-colorbar), size=K_self, M0 (no movement, left) vs M2 (scent, right)
-synced side by side. Generation counter at top. White background,
-English only, 16:9.
+colorbar), size=K_self, M0 (no movement, left) vs M2 (scent,
+tau=0.033333 -- the calibrated temperature, see
+docs/SCENT_MODEL_TAU_CALIBRATION_DECISION.md, right) synced side by
+side. Generation counter at top. White background, English only, 16:9.
 
 Built from the PILOT's individual_log.csv (seed 0), which records one
 snapshot every 100 generations (LOG_INTERVAL=100 in
@@ -72,7 +73,7 @@ def make_animation(out_path, fps, hold, figsize, dpi, writer_name):
     from matplotlib.animation import FFMpegWriter, FuncAnimation, PillowWriter
 
     gens0, kout0, kself0, px0, py0 = load_snapshots("none_pilot")
-    gens2, kout2, kself2, px2, py2 = load_snapshots("scent_pilot")
+    gens2, kout2, kself2, px2, py2 = load_snapshots("scent_pilot_v2")
     assert gens0 == gens2
     n_snapshots = len(gens0)
 
@@ -80,7 +81,7 @@ def make_animation(out_path, fps, hold, figsize, dpi, writer_name):
     gen_text = fig.text(0.5, 0.95, "", ha="center", va="top", fontsize=16, color="black")
 
     scatters = []
-    for ax, title in zip(axes, ["M0: no movement", "M2: scent"]):
+    for ax, title in zip(axes, ["M0: no movement", "M2: scent (tau=0.033)"]):
         ax.set_facecolor("white")
         ax.set_xlim(-0.5, GRID_WIDTH - 0.5)
         ax.set_ylim(-0.5, GRID_HEIGHT - 0.5)
