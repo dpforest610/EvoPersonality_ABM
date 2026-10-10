@@ -194,6 +194,16 @@ class ScentGenerationStats(LocalPlacementGenerationStats):
     - mean_opponent_count / var_opponent_count / max_opponent_count:
       degree distribution (population variance) of the actual-duel
       graph this generation -- "対戦相手数の分布".
+    - scent_index_mean: mean "scent-following index" over this
+      generation's movement decisions (movement="scent" only; NaN
+      otherwise). Per decision: (chosen candidate's score - mean of
+      candidate scores) / (max of candidate scores - mean of candidate
+      scores), skipping decisions where max == mean (no information in
+      the candidate scores to follow). ~0 for a uniform/random choice
+      among candidates, 1 for always picking the best-scoring candidate
+      -- see docs/PREREGISTRATION_scent_model.md revision 1 for why
+      this calibrates tau instead of any outcome metric (beta,
+      cooperation rate, assortativity, ...).
     """
 
     positions: List[Coord] = field(default_factory=list)
@@ -202,6 +212,7 @@ class ScentGenerationStats(LocalPlacementGenerationStats):
     mean_opponent_count: float = float("nan")
     var_opponent_count: float = float("nan")
     max_opponent_count: int = 0
+    scent_index_mean: float = float("nan")
 
 
 def _run_generation(
@@ -231,6 +242,8 @@ def _run_generation(
     coop_count = [0] * population_size
     all_edges = set()
     total_move_slots = 0
+    scent_index_sum = 0.0
+    scent_index_count = 0
 
     for _phase in range(n_phases):
         seen_pairs = set()
@@ -273,6 +286,14 @@ def _run_generation(
                     for c in options
                 ]
                 chosen = _softmax_sample(options, scores, rng_spatial, tau)
+
+                mean_score = statistics.fmean(scores)
+                max_score = max(scores)
+                if max_score != mean_score:
+                    chosen_score = scores[options.index(chosen)]
+                    scent_index_sum += (chosen_score - mean_score) / (max_score - mean_score)
+                    scent_index_count += 1
+
                 if chosen != cell:
                     del agent_at_cell[cell]
                     agent_at_cell[chosen] = i
@@ -318,10 +339,11 @@ def _run_generation(
     mean_opponent_count = statistics.fmean(degree)
     var_opponent_count = statistics.pvariance(degree)
     max_opponent_count = max(degree)
+    scent_index_mean = scent_index_sum / scent_index_count if scent_index_count > 0 else float("nan")
 
     return (
         payoffs, final_cells, list(all_edges), cooperation_rate, isolated_fraction, move_rate,
-        mean_opponent_count, var_opponent_count, max_opponent_count,
+        mean_opponent_count, var_opponent_count, max_opponent_count, scent_index_mean,
     )
 
 
@@ -403,7 +425,7 @@ def run_coupled_evolution_scent(
     for gen in range(start_generation, generations):
         (
             payoffs, final_cells, edges, cooperation_rate, isolated_fraction, move_rate,
-            mean_opp, var_opp, max_opp,
+            mean_opp, var_opp, max_opp, scent_index_mean,
         ) = _run_generation(
             genomes, cells, grid_width, grid_height, n_phases, rounds_per_duel,
             noise_std, tau, movement, radius, p_move, rng, rng_spatial,
@@ -437,6 +459,7 @@ def run_coupled_evolution_scent(
                 mean_opponent_count=mean_opp,
                 var_opponent_count=var_opp,
                 max_opponent_count=max_opp,
+                scent_index_mean=scent_index_mean,
             )
         )
 

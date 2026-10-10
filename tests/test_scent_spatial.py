@@ -140,3 +140,40 @@ def test_random_movement_requires_p_move():
             population_size=10, generations=1, rounds_per_duel=10, n_phases=1,
             grid_width=6, grid_height=6, movement="random",
         )
+
+
+def test_scent_index_is_nan_for_non_scent_movement():
+    stats_none = run_coupled_evolution_scent(
+        population_size=20, generations=3, rounds_per_duel=10, n_phases=2,
+        grid_width=6, grid_height=6, movement="none", seed=2,
+    )
+    for s in stats_none:
+        assert s.scent_index_mean != s.scent_index_mean  # NaN
+
+    stats_random = run_coupled_evolution_scent(
+        population_size=20, generations=3, rounds_per_duel=10, n_phases=2,
+        grid_width=6, grid_height=6, movement="random", p_move=0.3, seed=2,
+    )
+    for s in stats_random:
+        assert s.scent_index_mean != s.scent_index_mean  # NaN
+
+
+def test_scent_index_decreases_toward_zero_as_tau_grows():
+    kwargs = dict(
+        population_size=40, generations=10, rounds_per_duel=10, n_phases=2,
+        grid_width=10, grid_height=10, movement="scent", seed=4,
+    )
+    low_tau_stats = run_coupled_evolution_scent(tau=0.01, **kwargs)
+    high_tau_stats = run_coupled_evolution_scent(tau=100.0, **kwargs)
+
+    low_tau_index = statistics.fmean(
+        s.scent_index_mean for s in low_tau_stats if s.scent_index_mean == s.scent_index_mean
+    )
+    high_tau_index = statistics.fmean(
+        s.scent_index_mean for s in high_tau_stats if s.scent_index_mean == s.scent_index_mean
+    )
+    # near-greedy (low tau) should follow the scent score far more
+    # closely than near-uniform (high tau) random choice among candidates
+    assert low_tau_index > 0.7
+    assert abs(high_tau_index) < 0.2
+    assert low_tau_index > high_tau_index

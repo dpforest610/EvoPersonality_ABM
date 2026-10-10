@@ -70,7 +70,7 @@ PARAMS = dict(
     radius=1,
 )
 
-AggRow = Tuple[int, float, float, float, float, float, float, float, float, float, float, float, float, float, int]
+AggRow = Tuple[int, float, float, float, float, float, float, float, float, float, float, float, float, float, int, float]
 IndividualRow = Tuple[int, int, float, float, int, float, float, float, int, int]
 
 
@@ -220,7 +220,7 @@ def run_one_seed_chunked(
                     s.mean_payoff, s.cooperation_rate,
                     s.k_out_assortativity, s.k_self_assortativity, s.same_parent_fraction,
                     s.move_rate, s.isolated_fraction,
-                    s.mean_opponent_count, s.max_opponent_count,
+                    s.mean_opponent_count, s.max_opponent_count, s.scent_index_mean,
                 )
             )
             if s.generation % LOG_INTERVAL == 0:
@@ -260,15 +260,16 @@ def write_agg_csv(path: Path, rows: List[AggRow]) -> None:
             "mean_depth", "mean_payoff", "cooperation_rate",
             "k_out_assortativity", "k_self_assortativity", "same_parent_fraction",
             "move_rate", "isolated_fraction", "mean_opponent_count", "max_opponent_count",
+            "scent_index_mean",
         ])
         for (gen, mko, sko, mks, sks, md, mp, coop, kout_a, kself_a, spf,
-             move_rate, iso_frac, mean_opp, max_opp) in rows:
+             move_rate, iso_frac, mean_opp, max_opp, scent_index) in rows:
             def fmt(x):
                 return "" if x != x else f"{x:.6f}"  # NaN -> empty cell
             w.writerow([
                 gen, f"{mko:.6f}", f"{sko:.6f}", f"{mks:.6f}", f"{sks:.6f}",
                 f"{md:.4f}", f"{mp:.6f}", fmt(coop), fmt(kout_a), fmt(kself_a), fmt(spf),
-                f"{move_rate:.6f}", f"{iso_frac:.6f}", f"{mean_opp:.6f}", max_opp,
+                f"{move_rate:.6f}", f"{iso_frac:.6f}", f"{mean_opp:.6f}", max_opp, fmt(scent_index),
             ])
 
 
