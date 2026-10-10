@@ -449,6 +449,11 @@ def parse_args():
     p.add_argument("--workers", type=int, default=4)
     p.add_argument("--no-push", action="store_true", help="disable all git commit/push (local-only)")
     p.add_argument("--pilot", action="store_true", help="5 seeds, 1000 gens, chunk-size 250, no push")
+    p.add_argument("--out-suffix", type=str, default="",
+                   help="extra suffix appended to the output directory name (after _pilot when --pilot "
+                        "is set), so a rerun under changed parameters (e.g. a recalibrated tau or "
+                        "p_move) doesn't collide with and overwrite previously-recorded data for the "
+                        "same movement condition")
     return p.parse_args()
 
 
@@ -469,13 +474,13 @@ def main():
         seeds = list(range(5))
         generations = 1000
         chunk_size = 250
-        out_root = out_root_for(args.movement, suffix="_pilot")
+        out_root = out_root_for(args.movement, suffix="_pilot" + args.out_suffix)
         do_push = False
     else:
         seeds = list(range(args.n_seeds))
         generations = args.generations
         chunk_size = args.chunk_size
-        out_root = out_root_for(args.movement)
+        out_root = out_root_for(args.movement, suffix=args.out_suffix)
         do_push = not args.no_push
 
     push_checkpoints = do_push and args.push_checkpoints
