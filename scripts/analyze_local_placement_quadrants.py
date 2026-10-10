@@ -3,16 +3,26 @@
 Classifies each agent at each generation into one of 4 quadrants by a
 fixed threshold of 0.5 (the midpoint of K_out/K_self's clipped [0,1]
 range, not a per-sample median):
-    K_out < 0.5, K_self < 0.5  -> "secure"       (low avoidance, low anxiety)
-    K_out < 0.5, K_self >= 0.5 -> "preoccupied"   (low avoidance, high anxiety)
-    K_out >= 0.5, K_self < 0.5 -> "dismissing"    (high avoidance, low anxiety)
-    K_out >= 0.5, K_self >= 0.5-> "fearful"       (high avoidance, high anxiety)
+    K_out < 0.5, K_self >= 0.5 -> "secure"        (non-avoidant, self-directed)
+    K_out < 0.5, K_self < 0.5  -> "preoccupied"   (non-avoidant, other-anchored)
+    K_out >= 0.5, K_self >= 0.5-> "dismissing"    (avoidant, self-directed)
+    K_out >= 0.5, K_self < 0.5 -> "fearful"       (avoidant, other-anchored)
 
-These labels follow Bartholomew & Horowitz's four-category attachment
-model under the user's explicit analogy (K_out <-> avoidance of
-intimacy, K_self <-> fear of abandonment). This is a metaphorical
-overlay the user chose to apply; the simulation itself has no such
-construct.
+Labels follow Bartholomew & Horowitz's four-category attachment model
+under the user's analogy, revised from this script's first version:
+K_out keeps its original reading (K_out >= 0.5 <-> avoidant/negative
+other-model -- per coupling.py's update rule, K_out is the weight
+pulled toward the opponent's last observed action, i.e. being
+automatically swayed by the other party). K_self's reading is flipped
+from "fear of abandonment" (negative self-model) to "self-directedness"
+(positive self-model: K_self is the weight held toward the agent's own
+deliberate Lindgren-table strategy regardless of the opponent -- "hold
+the line" per that module's own docstring), so K_self >= 0.5 is now the
+positive-self-model side. This is a deliberate relabeling, not a new
+measurement: K_out/K_self and the threshold are unchanged, only which
+quadrant name attaches to which (K_out, K_self) combination changed.
+The simulation itself has no attachment construct; this is a
+metaphorical overlay the user chose to apply and then refine.
 
 For each (condition, k, seed), per generation (gen>=2000):
   - relative fitness per quadrant = mean(payoff / generation-mean-payoff)
@@ -52,10 +62,10 @@ THRESHOLD = 0.5
 
 QUADRANTS = ["secure", "preoccupied", "dismissing", "fearful"]
 QUADRANT_TITLES = {
-    "secure": "secure\n(K_out<0.5, K_self<0.5)",
-    "preoccupied": "preoccupied\n(K_out<0.5, K_self>=0.5)",
-    "dismissing": "dismissing\n(K_out>=0.5, K_self<0.5)",
-    "fearful": "fearful\n(K_out>=0.5, K_self>=0.5)",
+    "secure": "secure\n(K_out<0.5, K_self>=0.5)",
+    "preoccupied": "preoccupied\n(K_out<0.5, K_self<0.5)",
+    "dismissing": "dismissing\n(K_out>=0.5, K_self>=0.5)",
+    "fearful": "fearful\n(K_out>=0.5, K_self<0.5)",
 }
 
 LOCAL_COLOR = "#2a78d6"
@@ -64,11 +74,11 @@ MUTED_INK = "#8f8f88"
 
 
 def quadrant_of(k_out, k_self):
-    if k_out < THRESHOLD and k_self < THRESHOLD:
-        return "secure"
     if k_out < THRESHOLD and k_self >= THRESHOLD:
+        return "secure"
+    if k_out < THRESHOLD and k_self < THRESHOLD:
         return "preoccupied"
-    if k_out >= THRESHOLD and k_self < THRESHOLD:
+    if k_out >= THRESHOLD and k_self >= THRESHOLD:
         return "dismissing"
     return "fearful"
 
@@ -222,9 +232,10 @@ def main():
             ax.spines[["top", "right"]].set_visible(False)
 
     fig.suptitle(
-        "Attachment-quadrant breakdown (K_out/K_self high-low, threshold=0.5): "
-        "local vs shuffle(replay), k=4,8,16,32 (gen>=2000, per-seed mean, n<=50)",
-        fontsize=14, y=1.0,
+        "Attachment-quadrant breakdown (revised labels: K_self>=0.5=self-directed, "
+        "K_out>=0.5=avoidant), threshold=0.5: local vs shuffle(replay), "
+        "k=4,8,16,32 (gen>=2000, per-seed mean, n<=50)",
+        fontsize=13, y=1.0,
     )
     fig.tight_layout()
     fig_path = OUT_DIR / "local_placement_quadrants.png"
