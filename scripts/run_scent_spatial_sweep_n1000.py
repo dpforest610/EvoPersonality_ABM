@@ -322,6 +322,7 @@ def run_one_seed_chunked(
     seed: int, generations: int, chunk_size: int, out_root_str: str,
     movement: str, p_move: Optional[float], model_params: dict,
     record_phases_seed: Optional[int], record_phases_gens: Optional[set],
+    consider_move_prob: Optional[float] = None,
 ):
     out_root = Path(out_root_str)
     ckpt_path = checkpoint_path_for(out_root, seed)
@@ -365,7 +366,7 @@ def run_one_seed_chunked(
 
         chunk_stats, genomes, cells, rng_state, rng_spatial_state, parent_of = run_coupled_evolution_scent(
             seed=seed, generations=chunk_end, start_generation=next_gen,
-            movement=movement, p_move=p_move,
+            movement=movement, p_move=p_move, consider_move_prob=consider_move_prob,
             initial_genomes=genomes, initial_cells=cells,
             rng_state=rng_state, rng_spatial_state=rng_spatial_state,
             parent_of_state=parent_of, track_parent_state=True,
@@ -473,7 +474,8 @@ def write_phase_recording_gz(path: Path, phase_frames: dict) -> None:
         pickle.dump(phase_frames, f)
 
 
-def write_run_metadata(out_root: Path, movement: str, p_move: Optional[float], model_params: dict) -> None:
+def write_run_metadata(out_root: Path, movement: str, p_move: Optional[float], model_params: dict,
+                        consider_move_prob: Optional[float] = None) -> None:
     commit = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=REPO_ROOT, capture_output=True, text=True
     )
@@ -485,6 +487,7 @@ def write_run_metadata(out_root: Path, movement: str, p_move: Optional[float], m
         "python_version": sys.version,
         "movement": movement,
         "p_move": p_move,
+        "consider_move_prob": consider_move_prob,
         "model_params": model_params,
         "note": "raw individual_log.csv.gz and phase_recording.pkl.gz are LOCAL ONLY, not pushed "
                 "(see .gitignore) -- only timeseries.csv and summary.csv are committed",
@@ -636,6 +639,10 @@ def parse_args():
     p.add_argument("--record-phases-gens", type=str, default=None,
                    help="generation range 'lo-hi' (inclusive) to phase-record, e.g. '0-19'; "
                         "required if --record-phases-seed is set")
+    p.add_argument("--consider-move-prob", type=float, default=None,
+                   help="q: 'rarely moves' gate -- each phase, each agent only even considers "
+                        "moving with probability q (M1-low/M2-low); omit for the ordinary "
+                        "every-phase-considers M0/M1/M2 conditions")
     return p.parse_args()
 
 
@@ -677,7 +684,7 @@ def main():
     prevent_sleep_windows()
     try:
         out_root.mkdir(parents=True, exist_ok=True)
-        write_run_metadata(out_root, args.movement, args.p_move, model_params)
+        write_run_metadata(out_root, args.movement, args.p_move, model_params, args.consider_move_prob)
         if do_push:
             commit_and_push([out_root / "run_metadata.json"], f"Scent-spatial N=1000 sweep ({args.movement}, "
                                                                 f"{machine_tag()}): run metadata")
@@ -709,6 +716,7 @@ def main():
                     run_one_seed_chunked, seed, generations, chunk_size, str(out_root),
                     args.movement, args.p_move, model_params,
                     args.record_phases_seed, record_phases_gens,
+                    args.consider_move_prob,
                 ): seed
                 for seed in pending
             }

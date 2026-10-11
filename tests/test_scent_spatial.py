@@ -231,3 +231,50 @@ def test_phase_recording_does_not_change_simulation_results():
         assert a.payoffs == b.payoffs
         assert a.positions == b.positions
         assert a.move_rate == b.move_rate
+
+
+def test_consider_move_prob_scales_down_move_rate_scent():
+    kwargs = dict(
+        population_size=60, generations=10, rounds_per_duel=10, n_phases=5,
+        grid_width=12, grid_height=12, movement="scent", tau=1.0, seed=6,
+    )
+    full = run_coupled_evolution_scent(**kwargs)
+    gated = run_coupled_evolution_scent(consider_move_prob=0.1, **kwargs)
+    full_rate = statistics.fmean(s.move_rate for s in full)
+    gated_rate = statistics.fmean(s.move_rate for s in gated)
+    assert gated_rate < full_rate * 0.3  # roughly a 10x reduction, generous tolerance
+
+
+def test_consider_move_prob_scales_down_move_rate_random():
+    kwargs = dict(
+        population_size=60, generations=10, rounds_per_duel=10, n_phases=5,
+        grid_width=12, grid_height=12, movement="random", p_move=0.8, seed=6,
+    )
+    full = run_coupled_evolution_scent(**kwargs)
+    gated = run_coupled_evolution_scent(consider_move_prob=0.1, **kwargs)
+    full_rate = statistics.fmean(s.move_rate for s in full)
+    gated_rate = statistics.fmean(s.move_rate for s in gated)
+    assert gated_rate < full_rate * 0.3
+
+
+def test_consider_move_prob_none_is_unchanged_from_default():
+    kwargs = dict(
+        population_size=30, generations=8, rounds_per_duel=10, n_phases=5,
+        grid_width=10, grid_height=10, movement="scent", tau=1.0, seed=9,
+    )
+    plain = run_coupled_evolution_scent(**kwargs)
+    explicit_none = run_coupled_evolution_scent(consider_move_prob=None, **kwargs)
+    for a, b in zip(plain, explicit_none):
+        assert a.positions == b.positions
+        assert a.move_rate == b.move_rate
+        assert a.k_out == b.k_out
+
+
+def test_consider_move_prob_zero_means_nobody_moves():
+    stats = run_coupled_evolution_scent(
+        population_size=30, generations=5, rounds_per_duel=10, n_phases=5,
+        grid_width=10, grid_height=10, movement="scent", tau=1.0, seed=4,
+        consider_move_prob=0.0,
+    )
+    for s in stats:
+        assert s.move_rate == 0.0

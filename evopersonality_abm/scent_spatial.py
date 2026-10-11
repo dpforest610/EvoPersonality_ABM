@@ -230,8 +230,19 @@ def _run_generation(
     rng: random.Random,
     rng_spatial: random.Random,
     phase_callback=None,
+    consider_move_prob: Optional[float] = None,
 ):
-    """phase_callback, if given, is called once per phase (after that
+    """consider_move_prob (q), if given, gates movement a level above
+    the existing per-mode logic: each phase, each agent only even
+    considers moving with probability q (one extra rng_spatial draw per
+    agent per phase); otherwise it skips straight to "stay" with no
+    scoring/softmax (movement="scent") or p_move check
+    (movement="random"), and contributes nothing to that phase's
+    scent-following index. None (the default) skips this check
+    entirely -- zero added rng draws, identical to every existing
+    caller's behavior.
+
+    phase_callback, if given, is called once per phase (after that
     phase's duels AND movement step) as
     phase_callback(phase_index, positions_snapshot, moved_this_phase)
     -- positions_snapshot is a list[Coord] indexed by agent (same
@@ -288,6 +299,8 @@ def _run_generation(
             order = list(range(population_size))
             rng_spatial.shuffle(order)
             for i in order:
+                if consider_move_prob is not None and rng_spatial.random() >= consider_move_prob:
+                    continue
                 cell = cell_of_agent[i]
                 empty_neighbors = [
                     c for c in torus_neighbors(cell, grid_width, grid_height, offsets)
@@ -321,6 +334,8 @@ def _run_generation(
             order = list(range(population_size))
             rng_spatial.shuffle(order)
             for i in order:
+                if consider_move_prob is not None and rng_spatial.random() >= consider_move_prob:
+                    continue
                 if rng_spatial.random() >= p_move:
                     continue
                 cell = cell_of_agent[i]
@@ -388,6 +403,7 @@ def run_coupled_evolution_scent(
     radius: int = 1,
     movement: str = "none",
     p_move: Optional[float] = None,
+    consider_move_prob: Optional[float] = None,
     start_generation: int = 0,
     initial_genomes=None,
     initial_cells: Optional[List[Coord]] = None,
@@ -403,6 +419,12 @@ def run_coupled_evolution_scent(
     """Chapter-3 scent-movement model -- see module docstring.
 
     movement: "none" (M0), "random" (M1, needs p_move), or "scent" (M2).
+
+    consider_move_prob (q): optional "rarely moves" gate -- each phase,
+    each agent only even considers moving with probability q (M1-low /
+    M2-low use this with movement="random"/"scent" respectively); None
+    (the default) means every agent considers moving every phase, same
+    as every existing caller.
 
     Chunked-checkpoint resume: pass initial_genomes/initial_cells/
     rng_state/rng_spatial_state (as returned by a previous call with
@@ -477,6 +499,7 @@ def run_coupled_evolution_scent(
             genomes, cells, grid_width, grid_height, n_phases, rounds_per_duel,
             noise_std, tau, movement, radius, p_move, rng, rng_spatial,
             phase_callback=phase_callback,
+            consider_move_prob=consider_move_prob,
         )
 
         k_out_vals = [g.k_out for g in genomes]
