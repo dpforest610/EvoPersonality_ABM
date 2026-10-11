@@ -54,7 +54,7 @@ import random
 import statistics
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 from .coupling import mutate_genome, random_genome, run_coupled_duel
 from .game import DEFECT, PAYOFFS
@@ -229,7 +229,21 @@ def _run_generation(
     p_move: Optional[float],
     rng: random.Random,
     rng_spatial: random.Random,
+    phase_callback=None,
 ):
+    """phase_callback, if given, is called once per phase (after that
+    phase's duels AND movement step) as
+    phase_callback(phase_index, positions_snapshot, moved_this_phase)
+    -- positions_snapshot is a list[Coord] indexed by agent (same
+    convention as the generation-level `positions` field) and
+    moved_this_phase a list[bool], both length population_size.
+    K_out/K_self are not included since genomes (and hence K_out/K_self)
+    are fixed for the whole generation -- a caller recording a
+    presentation trajectory already has them once per generation.
+    Opt-in and side-effect-only: when None (the default, every existing
+    caller), this changes nothing about the simulation itself --
+    identical duels, identical movement decisions, identical RNG
+    consumption."""
     population_size = len(genomes)
     offsets = moore_offsets(radius)
     rounds_per_phase = rounds_per_duel // n_phases
@@ -246,6 +260,7 @@ def _run_generation(
     scent_index_count = 0
 
     for _phase in range(n_phases):
+        moved_this_phase = [False] * population_size
         seen_pairs = set()
         for cell, i in list(agent_at_cell.items()):
             for ncell in torus_neighbors(cell, grid_width, grid_height, offsets):
@@ -299,6 +314,7 @@ def _run_generation(
                     agent_at_cell[chosen] = i
                     cell_of_agent[i] = chosen
                     total_move_slots += 1
+                    moved_this_phase[i] = True
         elif movement == "random":
             if p_move is None:
                 raise ValueError("p_move must be given when movement='random'")
@@ -319,8 +335,13 @@ def _run_generation(
                 agent_at_cell[chosen] = i
                 cell_of_agent[i] = chosen
                 total_move_slots += 1
+                moved_this_phase[i] = True
         else:
             raise ValueError(f"movement must be one of {MOVEMENT_MODES}, got {movement!r}")
+
+        if phase_callback is not None:
+            positions_snapshot = [cell_of_agent[i] for i in range(population_size)]
+            phase_callback(_phase, positions_snapshot, moved_this_phase)
 
     final_cells = [cell_of_agent[i] for i in range(population_size)]
     payoffs = [
@@ -376,6 +397,8 @@ def run_coupled_evolution_scent(
     track_parent_state: bool = False,
     record_parent_history: bool = False,
     return_state: bool = False,
+    record_phases_for_generations: Optional[Set[int]] = None,
+    phase_recorder_out: Optional[Dict[int, List[Tuple[int, List[Coord], List[bool]]]]] = None,
 ):
     """Chapter-3 scent-movement model -- see module docstring.
 
@@ -388,7 +411,21 @@ def run_coupled_evolution_scent(
     returns (stats, final_genomes, final_cells, rng_state,
     rng_spatial_state) -- or a 6th element (parent_of) appended if
     track_parent_state=True.
-    """
+
+    record_phases_for_generations: an optional set of generation
+    indices for which per-phase (not just per-generation) snapshots are
+    wanted -- e.g. for a presentation animation showing movement within
+    a generation. When given, phase_recorder_out (a plain dict) must
+    also be given; for each requested generation it is populated with
+    phase_recorder_out[gen] = [(phase_index, positions_snapshot,
+    moved_this_phase), ...], one tuple per phase (see
+    `_run_generation`'s phase_callback docstring for the snapshot
+    format). K_out/K_self are not duplicated per phase since genomes
+    are fixed for the whole generation -- read them once from that
+    generation's ScentGenerationStats. This changes nothing about the
+    simulation for any generation not in the set, and nothing at all
+    when record_phases_for_generations is None (the default, every
+    existing caller)."""
     if movement not in MOVEMENT_MODES:
         raise ValueError(f"movement must be one of {MOVEMENT_MODES}, got {movement!r}")
     if rounds_per_duel % n_phases != 0:
@@ -423,12 +460,23 @@ def run_coupled_evolution_scent(
 
     stats: List[ScentGenerationStats] = []
     for gen in range(start_generation, generations):
+        phase_callback = None
+        if record_phases_for_generations is not None and gen in record_phases_for_generations:
+            if phase_recorder_out is None:
+                raise ValueError("phase_recorder_out must be given when record_phases_for_generations is set")
+            gen_frames: List[Tuple[int, List[Coord], List[bool]]] = []
+            phase_recorder_out[gen] = gen_frames
+
+            def phase_callback(phase_idx, positions_snapshot, moved_this_phase, _frames=gen_frames):
+                _frames.append((phase_idx, list(positions_snapshot), list(moved_this_phase)))
+
         (
             payoffs, final_cells, edges, cooperation_rate, isolated_fraction, move_rate,
             mean_opp, var_opp, max_opp, scent_index_mean,
         ) = _run_generation(
             genomes, cells, grid_width, grid_height, n_phases, rounds_per_duel,
             noise_std, tau, movement, radius, p_move, rng, rng_spatial,
+            phase_callback=phase_callback,
         )
 
         k_out_vals = [g.k_out for g in genomes]

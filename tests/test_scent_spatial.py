@@ -177,3 +177,57 @@ def test_scent_index_decreases_toward_zero_as_tau_grows():
     assert low_tau_index > 0.7
     assert abs(high_tau_index) < 0.2
     assert low_tau_index > high_tau_index
+
+
+def test_phase_recording_captures_one_entry_per_phase_for_requested_generations():
+    recorder = {}
+    run_coupled_evolution_scent(
+        population_size=20, generations=5, rounds_per_duel=12, n_phases=3,
+        grid_width=6, grid_height=6, movement="scent", tau=1.0, seed=2,
+        record_phases_for_generations={1, 3}, phase_recorder_out=recorder,
+    )
+    assert sorted(recorder.keys()) == [1, 3]
+    for gen in (1, 3):
+        assert len(recorder[gen]) == 3  # n_phases
+        for phase_idx, positions, moved in recorder[gen]:
+            assert len(positions) == 20
+            assert len(moved) == 20
+            assert all(isinstance(p, tuple) and len(p) == 2 for p in positions)
+
+
+def test_phase_recording_moved_flags_are_false_for_m0():
+    recorder = {}
+    run_coupled_evolution_scent(
+        population_size=20, generations=3, rounds_per_duel=12, n_phases=3,
+        grid_width=6, grid_height=6, movement="none", seed=2,
+        record_phases_for_generations={1}, phase_recorder_out=recorder,
+    )
+    for _, _, moved in recorder[1]:
+        assert not any(moved)
+
+
+def test_phase_recording_requires_recorder_out():
+    with pytest.raises(ValueError):
+        run_coupled_evolution_scent(
+            population_size=20, generations=3, rounds_per_duel=12, n_phases=3,
+            grid_width=6, grid_height=6, movement="none", seed=2,
+            record_phases_for_generations={1},
+        )
+
+
+def test_phase_recording_does_not_change_simulation_results():
+    kwargs = dict(
+        population_size=20, generations=5, rounds_per_duel=12, n_phases=3,
+        grid_width=6, grid_height=6, movement="scent", tau=1.0, seed=2,
+    )
+    plain = run_coupled_evolution_scent(**kwargs)
+    recorder = {}
+    recorded = run_coupled_evolution_scent(
+        record_phases_for_generations={1, 3}, phase_recorder_out=recorder, **kwargs
+    )
+    for a, b in zip(plain, recorded):
+        assert a.k_out == b.k_out
+        assert a.k_self == b.k_self
+        assert a.payoffs == b.payoffs
+        assert a.positions == b.positions
+        assert a.move_rate == b.move_rate

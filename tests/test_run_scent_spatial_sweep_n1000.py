@@ -1,0 +1,74 @@
+import importlib.util
+import math
+import sys
+from pathlib import Path
+
+import numpy as np
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+spec = importlib.util.spec_from_file_location(
+    "run_scent_spatial_sweep_n1000", REPO_ROOT / "scripts" / "run_scent_spatial_sweep_n1000.py"
+)
+mod = importlib.util.module_from_spec(spec)
+sys.modules["run_scent_spatial_sweep_n1000"] = mod
+spec.loader.exec_module(mod)
+
+
+def test_parse_gen_range():
+    assert mod.parse_gen_range(None) is None
+    assert mod.parse_gen_range("0-19") == set(range(0, 20))
+    assert mod.parse_gen_range("5-5") == {5}
+
+
+def _fake_snapshot(n, rng):
+    k_out = rng.random(n)
+    k_self = rng.random(n)
+    payoff = 1.0 + rng.random(n)
+    opp_k_self = rng.random(n)
+    opp_k_out = rng.random(n)
+    return dict(k_out=k_out.tolist(), k_self=k_self.tolist(), payoff=payoff.tolist(),
+                opp_k_self=opp_k_self.tolist(), opp_k_out=opp_k_out.tolist())
+
+
+def test_compute_seed_summary_basic_shape_and_values():
+    rng = np.random.default_rng(0)
+    snapshots = {gen: _fake_snapshot(50, rng) for gen in range(2000, 2500, 100)}
+    summary = mod.compute_seed_summary(seed=3, snapshots_by_gen=snapshots)
+
+    assert summary["seed"] == 3
+    assert summary["n_qualifying_gens"] == len(snapshots)
+    for field in mod.SUMMARY_FIELDS:
+        assert field in summary
+    # with real variance in random data, these should all be finite numbers
+    for field in ["beta_self_kself", "beta_self_kout", "beta_ctx_kself", "beta_ctx_kout",
+                   "beta1", "beta2", "gamma11", "gamma22", "gamma12",
+                   "mean_beta1", "mean_beta2", "mean_gamma11", "mean_gamma22", "mean_gamma12",
+                   "var_kout", "var_kself", "bc_kout", "bc_kself"]:
+        assert math.isfinite(summary[field]), f"{field} should be finite, got {summary[field]}"
+
+
+def test_compute_seed_summary_skips_degenerate_generations():
+    # a generation with constant k_out should be excluded (no variance to regress on)
+    snapshots = {
+        2000: dict(k_out=[0.5] * 10, k_self=[0.1, 0.9] * 5, payoff=[1.0, 2.0] * 5,
+                   opp_k_self=[0.2] * 10, opp_k_out=[0.3] * 10),
+    }
+    summary = mod.compute_seed_summary(seed=0, snapshots_by_gen=snapshots)
+    assert summary["n_qualifying_gens"] == 0
+    assert summary["beta1"] != summary["beta1"]  # NaN
+
+
+def test_write_and_read_summary_csv_roundtrip(tmp_path):
+    rng = np.random.default_rng(1)
+    snapshots = {gen: _fake_snapshot(30, rng) for gen in range(2000, 2300, 100)}
+    summary = mod.compute_seed_summary(seed=7, snapshots_by_gen=snapshots)
+    path = tmp_path / "seed_7_summary.csv"
+    mod.write_summary_csv(path, summary)
+
+    import csv
+    with open(path) as f:
+        rows = list(csv.DictReader(f))
+    assert len(rows) == 1
+    assert int(rows[0]["seed"]) == 7
+    assert int(rows[0]["n_qualifying_gens"]) == summary["n_qualifying_gens"]
+    assert abs(float(rows[0]["beta1"]) - summary["beta1"]) < 1e-6

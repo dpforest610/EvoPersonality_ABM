@@ -13,6 +13,8 @@ scripts/output/local_placement_sweep_pilot/
 scripts/output/local_placement_sweep_pilot_shuffle/
 scripts/output/**/*_checkpoint.pkl
 scripts/output/**/.run.lock
+scripts/output/scent_spatial_sweep_n1000/**/*_individual_log.csv.gz
+scripts/output/scent_spatial_sweep_n1000/**/*_phase_recording.pkl.gz
 venv/
 .venv/
 logs/
