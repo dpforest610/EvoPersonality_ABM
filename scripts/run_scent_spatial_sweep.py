@@ -492,6 +492,9 @@ def main():
     try:
         out_root.mkdir(parents=True, exist_ok=True)
         write_run_metadata(out_root, args.movement, args.p_move, model_params)
+        if do_push:
+            commit_and_push([out_root / "run_metadata.json"], f"Scent-spatial sweep ({args.movement}, "
+                                                                f"{machine_tag()}): run metadata")
 
         pending = [
             s for s in seeds
