@@ -1,0 +1,27 @@
+{
+  "updated_at": "2026-10-12T03:05:57+00:00",
+  "git_commit": "9cf0cb6007915769e2ba812f4178bd59789b40eb",
+  "machine": "doeRyanoMacBook-Neo.local",
+  "os": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+  "python_version": "3.15.0 (v3.15.0:d220409a13b, Oct  9 2026, 08:17:44) [Clang 21.0.0 (clang-2100.1.1.101)]",
+  "movement": "random",
+  "p_move": 0.501262,
+  "consider_move_prob": null,
+  "model_params": {
+    "population_size": 1000,
+    "rounds_per_duel": 50,
+    "point_mutation_rate": 0.05,
+    "duplication_rate": 0.02,
+    "split_rate": 0.02,
+    "max_memory_depth": 8,
+    "min_memory_depth": 0,
+    "k_mutation_std": 0.05,
+    "noise_std": 0.05,
+    "grid_width": 41,
+    "grid_height": 41,
+    "n_phases": 5,
+    "tau": 1.0,
+    "radius": 1
+  },
+  "note": "raw individual_log.csv.gz and phase_recording.pkl.gz are LOCAL ONLY, not pushed (see .gitignore) -- only timeseries.csv and summary.csv are committed"
+}
