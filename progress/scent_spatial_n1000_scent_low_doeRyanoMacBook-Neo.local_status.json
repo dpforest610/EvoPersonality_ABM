@@ -1,16 +1,16 @@
 {
-  "updated_at": "2026-10-13T04:07:42+00:00",
+  "updated_at": "2026-10-13T05:07:54+00:00",
   "generations_per_seed": 5000,
-  "done": 18,
+  "done": 20,
   "total": 30,
   "in_progress": [
     {
-      "seed": 18,
-      "next_generation": 4000
+      "seed": 20,
+      "next_generation": 1250
     },
     {
-      "seed": 19,
-      "next_generation": 4000
+      "seed": 21,
+      "next_generation": 1000
     }
   ]
 }
