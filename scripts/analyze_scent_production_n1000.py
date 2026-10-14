@@ -433,6 +433,105 @@ def prediction_figure(pis1000, pis100, path):
     plt.close(fig)
 
 
+def corrected_strip_figure(dev, path, primary_tests, title):
+    """fig1 (redrawn): beta_ctx(K_out) by condition, with the
+    isolated-excluded variant as the PRIMARY/official value
+    (docs/DEVIATION_isolated_agents.md decision 2) and the as-registered
+    (pre-decision, isolated agents not excluded) variant shown as faint
+    reference dots in the same panel (decision 3)."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    rng = np.random.default_rng(1)
+    fig, ax = plt.subplots(figsize=(7.4, 4.4), dpi=150)
+    labels = [l for l, _ in CONDITIONS]
+    for i, label in enumerate(labels):
+        seeds = dev["per_seed"][label]
+        excl = np.array([s["isolated_excluded"]["beta_ctx_kout"] for s in seeds])
+        reg = np.array([s["as_registered"]["beta_ctx_kout"] for s in seeds])
+        jitter = rng.uniform(-0.15, 0.15, len(excl))
+        ax.scatter(i + jitter, reg, s=10, color=INK2, alpha=0.18, edgecolors="none", zorder=2)
+        ax.scatter(i + jitter, excl, s=14, color=PALETTE[label], alpha=0.85,
+                   edgecolors="white", linewidths=0.5, zorder=3)
+        m = np.nanmedian(excl)
+        ax.plot([i - 0.28, i + 0.28], [m, m], color=INK, linewidth=2, zorder=4)
+    ax.set_xticks(range(len(labels)))
+    ax.set_xticklabels(labels)
+    ax.axvline(2.5, color=GRID, linewidth=1)
+    ax.axhline(0, color=GRID, linewidth=0.8, zorder=1)
+    ax.set_ylabel("beta_ctx(K_out) (per-seed median)", color=INK2, fontsize=9)
+    ax.set_title(title, color=INK, fontsize=11, loc="left")
+    _style(ax)
+    ymax = ax.get_ylim()[1]
+    span = ax.get_ylim()[1] - ax.get_ylim()[0]
+    for k, (i, j, txt) in enumerate(primary_tests):
+        y = ymax + span * (0.04 + 0.09 * k)
+        ax.plot([i, i, j, j], [y - span * 0.02, y, y, y - span * 0.02], color=INK2, linewidth=1)
+        ax.text((i + j) / 2, y + span * 0.01, txt, ha="center", va="bottom", fontsize=8, color=INK)
+    ax.set_ylim(top=ymax + span * (0.06 + 0.09 * len(primary_tests)))
+    ax.text(0.01, 0.98, "faint gray dots = as-registered value (isolated agents not excluded, pre-deviation-decision)",
+            transform=ax.transAxes, ha="left", va="top", fontsize=7, color=INK2)
+    ax.text(0.99, -0.13, "dots = seeds (n=30 per condition, gen>=2000); bar = median (isolated-excluded, official)",
+            transform=ax.transAxes, ha="right", fontsize=7, color=INK2)
+    fig.tight_layout()
+    fig.savefig(path)
+    plt.close(fig)
+
+
+def corrected_prediction_figure(data, dev1000, n100_clean, dev100, path):
+    """fig3 (redrawn): ring-model prediction vs observed, isolated-
+    excluded as the primary/official marker, as-registered shown as a
+    faint 'x' at the same x0 (same decision as corrected_strip_figure).
+    x0 (K_out assortativity) is unaffected by the isolated-agent bug and
+    is unchanged from the original figure."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(7.6, 4.8), dpi=150)
+    xs = np.linspace(0, 0.75, 200)
+    yh, lo, hi = zip(*[n100.predict_interval(x) for x in xs])
+    ax.fill_between(xs, lo, hi, color="#d9d8d3", alpha=0.6, linewidth=0, label="ring-model 95% PI")
+    ax.plot(xs, yh, color=INK2, linewidth=2, label=r"$\hat{y}(x) = -0.00016799 - 0.00719578x$")
+
+    off1000 = {"M0": (8, 8), "M1": (8, 6), "M2": (8, -16), "M1-low": (-10, 14), "M2-low": (-72, 8)}
+    for label in [l for l, _ in CONDITIONS]:
+        x0, _ = x0_y_obs(data, label)
+        seeds = dev1000["per_seed"][label]
+        y_excl = float(np.nanmedian([s["isolated_excluded"]["beta_ctx_kout"] for s in seeds]))
+        y_reg = float(np.nanmedian([s["as_registered"]["beta_ctx_kout"] for s in seeds]))
+        if abs(y_reg - y_excl) > 1e-9:
+            ax.scatter([x0], [y_reg], s=34, color=INK2, alpha=0.35, marker="x", linewidths=1.6, zorder=3)
+        ax.scatter([x0], [y_excl], s=60, color=PALETTE[label], edgecolors="white", linewidths=1.5, zorder=4)
+        ax.annotate(f"{label} (N=1000)", (x0, y_excl), xytext=off1000.get(label, (6, 4)),
+                    textcoords="offset points", fontsize=8, color=INK,
+                    arrowprops=dict(arrowstyle="-", color=GRID, linewidth=0.8))
+
+    off100 = {"M0": (8, -16), "M1": (8, 4), "M2": (-62, -14)}
+    for label in ["M0", "M1", "M2"]:
+        x0 = n100_clean["Bb"][label]["x0"]
+        seeds = dev100["per_seed"][label]
+        y_excl = float(np.nanmedian([s["isolated_excluded"]["beta_ctx_kout"] for s in seeds]))
+        y_reg = float(np.nanmedian([s["as_registered"]["beta_ctx_kout"] for s in seeds]))
+        if abs(y_reg - y_excl) > 1e-9:
+            ax.scatter([x0], [y_reg], s=30, color=INK2, alpha=0.35, marker="x", linewidths=1.4, zorder=3)
+        ax.scatter([x0], [y_excl], s=50, facecolors="white", edgecolors=PALETTE[label],
+                   linewidths=1.8, marker="s", zorder=4)
+        ax.annotate(f"{label} (N=100)", (x0, y_excl), xytext=off100.get(label, (6, -10)),
+                    textcoords="offset points", fontsize=8, color=INK2)
+
+    ax.text(0.99, 0.02, "faint 'x' = as-registered value (isolated agents not excluded), same x0, where it differs "
+            "from the official marker", transform=ax.transAxes, ha="right", fontsize=7, color=INK2)
+    ax.set_xlabel("K_out assortativity (seed median of per-seed means, gen>=2000)", color=INK2, fontsize=9)
+    ax.set_ylabel("beta_ctx(K_out) (seed median, isolated-excluded, official)", color=INK2, fontsize=9)
+    ax.set_title("Ring-model prediction vs observed (filled = N=1000, open square = N=100)",
+                 color=INK, fontsize=11, loc="left")
+    ax.legend(frameon=False, fontsize=8, loc="lower left", bbox_to_anchor=(0, 0.06))
+    _style(ax)
+    fig.tight_layout()
+    fig.savefig(path)
+    plt.close(fig)
+
+
 def zstar_figure(z1000, path):
     import matplotlib
     matplotlib.use("Agg")
@@ -641,13 +740,20 @@ def main():
         json.dump(_json_safe(res), f, indent=2, ensure_ascii=False)
         f.write("\n")
     FIG_DIR.mkdir(parents=True, exist_ok=True)
-    strip_figure(data, "beta_ctx_kout", "summary", "beta_ctx(K_out) (per-seed median)",
-                 "beta_ctx(K_out) by condition, N=1000", FIG_DIR / "fig1_beta_ctx_kout.png",
-                 [(1, 2, _p_label("A", a)), (3, 4, _p_label("A2", a2))])
+    # fig1/fig3 redrawn with the isolated-excluded variant as the official
+    # value (docs/DEVIATION_isolated_agents.md decisions 2-3); fig2/fig4
+    # unchanged -- neither uses beta_ctx, so the deviation doesn't affect them.
+    a_excl = dev1000["tests"]["M2 vs M1"]["isolated_excluded"]
+    a2_excl = dev1000["tests"]["M2-low vs M1-low"]["isolated_excluded"]
+    corrected_strip_figure(
+        dev1000, FIG_DIR / "fig1_beta_ctx_kout.png",
+        [(1, 2, _p_label("A", a_excl)), (3, 4, _p_label("A2", a2_excl))],
+        "beta_ctx(K_out) by condition, N=1000 (isolated-excluded, official)",
+    )
     strip_figure(data, "k_out_assortativity", "op", "K_out assortativity (per-seed mean)",
                  "K_out assortativity of actually-duelled pairs, N=1000", FIG_DIR / "fig2_kout_assortativity.png",
                  [(1, 2, _p_label("B(a)", ba)), (3, 4, _p_label("B(a)-equiv", ba2))])
-    prediction_figure(allpi, n100_clean["Bb"], FIG_DIR / "fig3_ring_prediction.png")
+    corrected_prediction_figure(data, dev1000, n100_clean, dev100, FIG_DIR / "fig3_ring_prediction.png")
     zstar_figure(z, FIG_DIR / "fig4_zstar_kself.png")
     print(f"\nwrote {OUT_JSON} and {FIG_DIR}/*.png")
 
