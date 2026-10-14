@@ -53,6 +53,21 @@ if [ -z "$WORKERS" ] || [ "$WORKERS" = "0" ]; then
 fi
 log "Using WORKERS=$WORKERS (performance cores if detected, else physical/logical core fallback)"
 
+# ---------------------------------------------------------------- oversubscription check
+# Up to 5 production runs (M0, M1, M2, M1-low, M2-low) run at the same
+# time, each with $WORKERS worker processes. If that exceeds the logical
+# core count, workers time-share the CPU and every seed runs slower.
+N_CONCURRENT_RUNS=5
+LOGICAL_CORES="$(sysctl -n hw.logicalcpu 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null)"
+TOTAL_WORKERS=$((WORKERS * N_CONCURRENT_RUNS))
+if [ -n "$LOGICAL_CORES" ] && [ "$TOTAL_WORKERS" -gt "$LOGICAL_CORES" ]; then
+    log "WARNING: $N_CONCURRENT_RUNS concurrent runs x WORKERS=$WORKERS = $TOTAL_WORKERS worker processes," \
+        "but this machine has only $LOGICAL_CORES logical cores. Workers will time-share; consider" \
+        "WORKERS=$((LOGICAL_CORES / N_CONCURRENT_RUNS > 0 ? LOGICAL_CORES / N_CONCURRENT_RUNS : 1))."
+else
+    log "Worker budget: $TOTAL_WORKERS worker processes on ${LOGICAL_CORES:-unknown} logical cores."
+fi
+
 PY="venv/bin/python3"
 if [ ! -x "$PY" ]; then
     PY="python3"
@@ -61,31 +76,18 @@ log "Using Python: $PY"
 
 # ---------------------------------------------------------------- network-aware git push helper
 git_commit_and_push() {
-    # $1 = commit message, remaining args = paths to add
+    # $1 = commit message, remaining args = paths to add.
+    # Runs through scripts/git_serial.py, which holds the same cross-process
+    # lock as the production runners (so this commit can't collide with
+    # theirs on .git/index.lock), commits only these paths, and bounds
+    # every git call with a timeout. Never fatal.
     msg="$1"
     shift
-    git add "$@" 2>>"$PILOT_LOG"
-    if ! git commit -m "$msg" >>"$PILOT_LOG" 2>&1; then
-        log "nothing to commit or commit failed for: $msg (continuing)"
-        return 0
+    if "$PY" scripts/git_serial.py commit-push -m "$msg" "$@" >>"$PILOT_LOG" 2>&1; then
+        log "pushed: $msg"
+    else
+        log "commit/push did not complete for: $msg (see $PILOT_LOG; run is NOT stopped)"
     fi
-    if ! curl -s --max-time 5 -o /dev/null https://github.com; then
-        log "no network reachable -- skipping push for now (next successful push will include this commit): $msg"
-        return 0
-    fi
-    delay=2
-    attempt=1
-    while [ $attempt -le 4 ]; do
-        if git pull --rebase >>"$PILOT_LOG" 2>&1 && git push >>"$PILOT_LOG" 2>&1; then
-            log "pushed: $msg"
-            return 0
-        fi
-        log "push attempt $attempt failed for: $msg (retrying in ${delay}s)"
-        sleep "$delay"
-        delay=$((delay * 2))
-        attempt=$((attempt + 1))
-    done
-    log "push ultimately failed for: $msg -- will retry on the next commit (run is NOT stopped)"
     return 0
 }
 

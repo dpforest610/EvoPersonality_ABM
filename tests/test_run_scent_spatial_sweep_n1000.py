@@ -72,3 +72,27 @@ def test_write_and_read_summary_csv_roundtrip(tmp_path):
     assert int(rows[0]["seed"]) == 7
     assert int(rows[0]["n_qualifying_gens"]) == summary["n_qualifying_gens"]
     assert abs(float(rows[0]["beta1"]) - summary["beta1"]) < 1e-6
+
+
+def test_atomic_pickle_dump_replaces_and_leaves_no_tmp(tmp_path):
+    path = tmp_path / "seed_0_checkpoint.pkl"
+    mod._atomic_pickle_dump(path, {"next_generation": 250})
+    mod._atomic_pickle_dump(path, {"next_generation": 500})
+    import pickle
+    with open(path, "rb") as f:
+        assert pickle.load(f)["next_generation"] == 500
+    assert [p.name for p in tmp_path.iterdir()] == ["seed_0_checkpoint.pkl"]
+
+
+def test_scratch_branch_is_per_condition():
+    a = mod.scratch_branch_for(Path("scripts/output/scent_spatial_sweep_n1000/scent/host"))
+    b = mod.scratch_branch_for(Path("scripts/output/scent_spatial_sweep_n1000/scent_low/host"))
+    assert a != b and a.endswith("-scent") and b.endswith("-scent_low")
+
+
+def test_warn_if_oversubscribed(capsys, monkeypatch):
+    monkeypatch.setattr(mod, "total_cores", lambda: 8)
+    mod.warn_if_oversubscribed(8)
+    assert "WARNING" not in capsys.readouterr().err
+    mod.warn_if_oversubscribed(9)
+    assert "WARNING" in capsys.readouterr().err

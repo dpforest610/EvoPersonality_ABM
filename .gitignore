@@ -18,3 +18,4 @@ scripts/output/scent_spatial_sweep_n1000/**/*_phase_recording.pkl.gz
 venv/
 .venv/
 logs/
+scripts/output/**/*_checkpoint.pkl.tmp

@@ -7,7 +7,10 @@ ring-model-predicted interval) hold at 10x the population, and whether
 z*_K_self sits closer to the population mean (weaker drift) than at
 N=100. Same chunked/checkpointed engine (lock file, Windows sleep
 suppression, periodic git push with pull --rebase first) as
-run_scent_spatial_sweep.py.
+run_scent_spatial_sweep.py, except that every git operation runs on a
+background thread, serialized across processes by scripts/git_serial.py
+(see that module for the 2026-10 incident this fixes): the main loop,
+which is the only writer of finished seeds' results, never waits on git.
 
 Record-keeping differs from the N=100 runner (see
 docs/PREREGISTRATION_scent_model_N1000.md section on this): the raw
@@ -54,7 +57,6 @@ import re
 import statistics
 import subprocess
 import sys
-import tempfile
 import time
 from collections import defaultdict
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
@@ -64,8 +66,12 @@ from typing import List, Optional, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 from evopersonality_abm.scent_spatial import run_coupled_evolution_scent
+from git_serial import BackgroundGitWorker
+from git_serial import commit_and_push as _serial_commit_and_push
+from git_serial import push_files_to_scratch_branch
 
 EXPERIMENT_ROOT = Path("scripts/output/scent_spatial_sweep_n1000")
 SEEDS = list(range(30))
@@ -73,6 +79,7 @@ GENERATIONS = 5000
 LOG_INTERVAL = 100
 CHUNK_SIZE = 250
 STEADY_STATE_MIN_GEN = 2000
+GIT_DRAIN_SECONDS = 1800  # max wait at exit for queued commits/pushes
 
 PARAMS = dict(
     population_size=1000,
@@ -318,6 +325,24 @@ def parse_gen_range(spec: Optional[str]) -> Optional[set]:
     return set(range(int(lo), int(hi) + 1))
 
 
+def _atomic_pickle_dump(path: Path, obj) -> None:
+    """Write to a temp file, then rename over `path`, so a concurrent reader
+    (the background git snapshot / status job) never sees a half-written
+    checkpoint. On Windows the rename can fail while a reader holds the
+    file open, so retry briefly."""
+    tmp = path.with_name(path.name + ".tmp")
+    with open(tmp, "wb") as f:
+        pickle.dump(obj, f)
+    for attempt in range(10):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            if attempt == 9:
+                raise
+            time.sleep(0.5)
+
+
 def run_one_seed_chunked(
     seed: int, generations: int, chunk_size: int, out_root_str: str,
     movement: str, p_move: Optional[float], model_params: dict,
@@ -409,22 +434,21 @@ def run_one_seed_chunked(
         next_gen = chunk_end
         n_chunks_this_call += 1
 
-        with open(ckpt_path, "wb") as f:
-            pickle.dump(
-                {
-                    "next_generation": next_gen,
-                    "genomes": genomes,
-                    "cells": cells,
-                    "rng_state": rng_state,
-                    "rng_spatial_state": rng_spatial_state,
-                    "parent_of": parent_of,
-                    "agg_rows": agg_rows,
-                    "individual_rows": individual_rows,
-                    "snapshots_by_gen": snapshots_by_gen,
-                    "phase_frames": phase_frames,
-                },
-                f,
-            )
+        _atomic_pickle_dump(
+            ckpt_path,
+            {
+                "next_generation": next_gen,
+                "genomes": genomes,
+                "cells": cells,
+                "rng_state": rng_state,
+                "rng_spatial_state": rng_spatial_state,
+                "parent_of": parent_of,
+                "agg_rows": agg_rows,
+                "individual_rows": individual_rows,
+                "snapshots_by_gen": snapshots_by_gen,
+                "phase_frames": phase_frames,
+            },
+        )
 
     elapsed = time.time() - t0
     gens_this_call = next_gen - gens_at_call_start
@@ -530,88 +554,34 @@ def write_status_json(path: Path, out_root: Path, seeds: List[int], generations:
         f.write("\n")
 
 
-def _git(*args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], cwd=REPO_ROOT, capture_output=True, text=True)
-
-
 def commit_and_push(paths: List[Path], message: str) -> None:
-    add = _git("add", *[p.as_posix() for p in paths])
-    if add.returncode != 0:
-        print(f"git add failed for {message}: {add.stderr.strip()}", flush=True)
-        return
-    commit = _git("commit", "-m", message)
-    if commit.returncode != 0:
-        if "nothing to commit" in (commit.stdout + commit.stderr):
-            return
-        print(f"git commit failed for {message}: {commit.stderr.strip()}", flush=True)
-        return
-
-    pull = _git("pull", "--rebase")
-    if pull.returncode != 0:
-        print(f"git pull --rebase failed before pushing {message}: {pull.stderr.strip()}", flush=True)
-
-    delay = 2
-    for attempt in range(4):
-        push = _git("push")
-        if push.returncode == 0:
-            print(f"pushed: {message}", flush=True)
-            return
-        print(f"git push failed (attempt {attempt + 1}) for {message}: {push.stderr.strip()}", flush=True)
-        if attempt < 3:
-            retry_pull = _git("pull", "--rebase")
-            if retry_pull.returncode != 0:
-                print(f"git pull --rebase retry failed: {retry_pull.stderr.strip()}", flush=True)
-        time.sleep(delay)
-        delay *= 2
-    print(f"git push ultimately failed for: {message}", flush=True)
+    """Synchronous; called from the background git thread (never from the
+    main loop). Serialized across processes and timeout-bounded -- see
+    scripts/git_serial.py."""
+    _serial_commit_and_push(paths, message, log=lambda m: print(m, flush=True))
 
 
-def push_checkpoint_snapshot_to_scratch_branch(
-    paths: List[Path], message: str, branch: str = "checkpoint-scratch-scent-spatial-n1000"
-) -> None:
+def scratch_branch_for(out_root: Path) -> str:
+    # one branch per condition: the 5 conditions used to force-push the
+    # same branch and overwrite each other's snapshots
+    return f"checkpoint-scratch-scent-spatial-n1000-{out_root.parent.name}"
+
+
+def push_checkpoint_snapshot_to_scratch_branch(paths: List[Path], message: str, branch: str) -> None:
     if not paths:
         return
-    with tempfile.TemporaryDirectory() as tmpdir:
-        env = dict(os.environ)
-        env["GIT_INDEX_FILE"] = os.path.join(tmpdir, "index")
-        rel_paths = [p.resolve().relative_to(REPO_ROOT).as_posix() for p in paths]
+    push_files_to_scratch_branch(paths, message, branch, log=lambda m: print(m, flush=True))
 
-        add = subprocess.run(
-            ["git", "add", "-f", "--", *rel_paths],
-            cwd=REPO_ROOT, env=env, capture_output=True, text=True,
-        )
-        if add.returncode != 0:
-            print(f"scratch-branch git add failed for {message}: {add.stderr.strip()}", flush=True)
-            return
-        write_tree = subprocess.run(
-            ["git", "write-tree"], cwd=REPO_ROOT, env=env, capture_output=True, text=True,
-        )
-        if write_tree.returncode != 0:
-            print(f"scratch-branch write-tree failed for {message}: {write_tree.stderr.strip()}", flush=True)
-            return
-        tree_sha = write_tree.stdout.strip()
-        commit_tree = subprocess.run(
-            ["git", "commit-tree", tree_sha, "-m", message],
-            cwd=REPO_ROOT, env=env, capture_output=True, text=True,
-        )
-        if commit_tree.returncode != 0:
-            print(f"scratch-branch commit-tree failed for {message}: {commit_tree.stderr.strip()}", flush=True)
-            return
-        commit_sha = commit_tree.stdout.strip()
 
-        delay = 2
-        for attempt in range(4):
-            push = subprocess.run(
-                ["git", "push", "--force", "origin", f"{commit_sha}:refs/heads/{branch}"],
-                cwd=REPO_ROOT, capture_output=True, text=True,
-            )
-            if push.returncode == 0:
-                print(f"pushed checkpoint snapshot to {branch}: {message}", flush=True)
-                return
-            print(f"scratch-branch push failed (attempt {attempt + 1}) for {message}: {push.stderr.strip()}", flush=True)
-            time.sleep(delay)
-            delay *= 2
-        print(f"scratch-branch push ultimately failed for: {message}", flush=True)
+def total_cores() -> int:
+    return os.cpu_count() or 1
+
+
+def warn_if_oversubscribed(workers: int) -> None:
+    cores = total_cores()
+    if workers > cores:
+        print(f"WARNING: --workers {workers} exceeds this machine's {cores} logical cores; "
+              f"workers will time-share and every seed will run slower.", file=sys.stderr, flush=True)
 
 
 def parse_args():
@@ -680,14 +650,22 @@ def main():
     status_interval = args.status_interval_seconds if do_push else 0
     status_path = REPO_ROOT / status_path_for(out_root)
 
+    warn_if_oversubscribed(args.workers)
+    label = out_root.parent.name  # e.g. "scent_low" -- args.movement alone can't tell M2 from M2-low
+    scratch_branch = scratch_branch_for(out_root)
+
     lock_path = acquire_lock(out_root)
     prevent_sleep_windows()
+    # All git work happens on this thread; the main loop only enqueues.
+    git_worker = BackgroundGitWorker(log=lambda m: print(m, flush=True))
+    finished_normally = False
     try:
         out_root.mkdir(parents=True, exist_ok=True)
         write_run_metadata(out_root, args.movement, args.p_move, model_params, args.consider_move_prob)
         if do_push:
-            commit_and_push([out_root / "run_metadata.json"], f"Scent-spatial N=1000 sweep ({args.movement}, "
-                                                                f"{machine_tag()}): run metadata")
+            metadata_path = out_root / "run_metadata.json"
+            metadata_msg = f"Scent-spatial N=1000 sweep ({label}, {machine_tag()}): run metadata"
+            git_worker.submit(lambda: commit_and_push([metadata_path], metadata_msg))
 
         pending = [
             s for s in seeds
@@ -706,6 +684,17 @@ def main():
         last_checkpoint = (completed_count // args.checkpoint_every) * args.checkpoint_every
         batch_since_checkpoint: List[int] = []
         paths_since_checkpoint: List[Path] = []
+
+        def submit_status(final: bool = False) -> None:
+            msg = (f"Progress snapshot N=1000 ({label}, {machine_tag()}): "
+                   f"{completed_count}/{len(seeds)} seeds done" + (" (final)" if final else ""))
+
+            def job():
+                write_status_json(status_path, out_root, seeds, generations)
+                commit_and_push([status_path], msg)
+
+            # coalesce: never queue a second status job behind one that hasn't run yet
+            git_worker.submit(job, key=None if final else "status")
 
         t_start = time.time()
         last_checkpoint_poll = time.time()
@@ -750,10 +739,11 @@ def main():
                         threshold = (completed_count // args.checkpoint_every) * args.checkpoint_every
                         if threshold > last_checkpoint:
                             message = (
-                                f"Scent-spatial N=1000 sweep ({args.movement}, {machine_tag()}, chunked): "
+                                f"Scent-spatial N=1000 sweep ({label}, {machine_tag()}, chunked): "
                                 f"{completed_count}/{len(seeds)} seeds complete (batch: {sorted(batch_since_checkpoint)})"
                             )
-                            commit_and_push(paths_since_checkpoint, message)
+                            batch_paths = list(paths_since_checkpoint)
+                            git_worker.submit(lambda p=batch_paths, m=message: commit_and_push(p, m))
                             last_checkpoint = threshold
                             batch_since_checkpoint = []
                             paths_since_checkpoint = []
@@ -761,39 +751,49 @@ def main():
                 futures = {f: futures[f] for f in not_done}
 
                 if push_checkpoints and (time.time() - last_checkpoint_poll) >= args.checkpoint_poll_seconds:
-                    ckpt_files = sorted(out_root.glob("seed_*_checkpoint.pkl"))
+                    # only seeds still running: a finished seed's results are on
+                    # disk (and its checkpoint deleted) as soon as it is collected
+                    in_progress = sorted(futures.values())
+                    ckpt_files = [checkpoint_path_for(out_root, s) for s in in_progress
+                                  if checkpoint_path_for(out_root, s).exists()]
                     if ckpt_files:
-                        push_checkpoint_snapshot_to_scratch_branch(
-                            ckpt_files,
-                            f"Scent-spatial N=1000 sweep ({args.movement}, {machine_tag()}): periodic checkpoint "
-                            f"snapshot ({len(ckpt_files)} in-progress seed(s))",
+                        msg = (f"Scent-spatial N=1000 sweep ({label}, {machine_tag()}): periodic checkpoint "
+                               f"snapshot ({len(ckpt_files)} in-progress seed(s))")
+                        git_worker.submit(
+                            lambda p=ckpt_files, m=msg: push_checkpoint_snapshot_to_scratch_branch(p, m, scratch_branch),
+                            key="checkpoint-snapshot",
                         )
                     last_checkpoint_poll = time.time()
 
                 if status_interval > 0 and (time.time() - last_status_push) >= status_interval:
-                    write_status_json(status_path, out_root, seeds, generations)
-                    commit_and_push([status_path], f"Progress snapshot N=1000 ({args.movement}, {machine_tag()}): "
-                                                    f"{completed_count}/{len(seeds)} seeds done")
+                    submit_status()
                     last_status_push = time.time()
 
         if do_push and batch_since_checkpoint:
             message = (
-                f"Scent-spatial N=1000 sweep ({args.movement}, {machine_tag()}, chunked): "
+                f"Scent-spatial N=1000 sweep ({label}, {machine_tag()}, chunked): "
                 f"{completed_count}/{len(seeds)} seeds complete (final partial batch: {sorted(batch_since_checkpoint)})"
             )
-            commit_and_push(paths_since_checkpoint, message)
+            batch_paths = list(paths_since_checkpoint)
+            git_worker.submit(lambda: commit_and_push(batch_paths, message))
 
         if status_interval > 0:
-            write_status_json(status_path, out_root, seeds, generations)
-            commit_and_push([status_path], f"Progress snapshot N=1000 ({args.movement}, {machine_tag()}): "
-                                            f"{completed_count}/{len(seeds)} seeds done (final)")
+            submit_status(final=True)
 
         print(f"\nAll {completed_count}/{len(seeds)} seeds complete in {time.time() - t_start:.1f}s wall-clock.",
               flush=True)
+        finished_normally = True
     finally:
+        # every result file is already on disk; this only waits for the
+        # queued commits/pushes (each git call is timeout-bounded). On
+        # Ctrl-C / a crash, don't hold the exit hostage to the network:
+        # anything not yet committed is picked up by the next run's batches.
+        print("Waiting for background git jobs to finish...", flush=True)
+        if not git_worker.close(timeout=GIT_DRAIN_SECONDS if finished_normally else 10):
+            print("Background git jobs still running; exiting without them (local commits are "
+                  "pushed by the next successful push).", flush=True)
         allow_sleep_windows()
         release_lock(lock_path)
-
 
 if __name__ == "__main__":
     main()
