@@ -369,7 +369,15 @@ def run_one_seed_chunked(
     movement: str, p_move: Optional[float], model_params: dict,
     record_phases_seed: Optional[int], record_phases_gens: Optional[set],
     consider_move_prob: Optional[float] = None,
+    individual_log_interval: int = LOG_INTERVAL,
 ):
+    """individual_log_interval: write a full-population row to the
+    individual log every this many generations (default LOG_INTERVAL=100,
+    matching production). Pass 1 for a dense, every-generation log (e.g.
+    for a presentation recording run) -- this is independent of
+    STEADY_STATE_MIN_GEN snapshot collection for compute_seed_summary,
+    which always stays on the fixed LOG_INTERVAL cadence regardless, so a
+    denser individual log never changes seed_summary.csv."""
     out_root = Path(out_root_str)
     ckpt_path = checkpoint_path_for(out_root, seed)
 
@@ -440,18 +448,21 @@ def run_one_seed_chunked(
                     s.mean_opponent_count, s.max_opponent_count, s.scent_index_mean,
                 )
             )
-            if s.generation % LOG_INTERVAL == 0:
+            if s.generation % individual_log_interval == 0:
                 for i in range(len(s.k_out)):
                     pos_x, pos_y = s.positions[i]
                     individual_rows.append(
                         (s.generation, i, s.k_out[i], s.k_self[i], s.memory_depths[i], s.payoffs[i],
                          s.opponent_mean_k_self[i], s.opponent_mean_k_out[i], pos_x, pos_y)
                     )
-                if s.generation >= STEADY_STATE_MIN_GEN:
-                    snapshots_by_gen[s.generation] = {
-                        "k_out": list(s.k_out), "k_self": list(s.k_self), "payoff": list(s.payoffs),
-                        "opp_k_self": list(s.opponent_mean_k_self), "opp_k_out": list(s.opponent_mean_k_out),
-                    }
+            # unaffected by individual_log_interval: seed_summary's
+            # steady-state snapshots always stay on the standard
+            # LOG_INTERVAL cadence, whatever the individual log's density.
+            if s.generation % LOG_INTERVAL == 0 and s.generation >= STEADY_STATE_MIN_GEN:
+                snapshots_by_gen[s.generation] = {
+                    "k_out": list(s.k_out), "k_self": list(s.k_self), "payoff": list(s.payoffs),
+                    "opp_k_self": list(s.opponent_mean_k_self), "opp_k_out": list(s.opponent_mean_k_out),
+                }
         next_gen = chunk_end
         n_chunks_this_call += 1
 
@@ -643,6 +654,12 @@ def parse_args():
                    help="q: 'rarely moves' gate -- each phase, each agent only even considers "
                         "moving with probability q (M1-low/M2-low); omit for the ordinary "
                         "every-phase-considers M0/M1/M2 conditions")
+    p.add_argument("--individual-log-interval", type=int, default=LOG_INTERVAL,
+                   help=f"write a full-population row to the individual log every this many "
+                        f"generations (default {LOG_INTERVAL}, matching production); pass 1 for a "
+                        "dense every-generation log (e.g. for a presentation recording run) -- "
+                        "independent of seed_summary's steady-state snapshot cadence, which is "
+                        "unaffected by this flag")
     return p.parse_args()
 
 
@@ -740,7 +757,7 @@ def main():
                     run_one_seed_chunked, seed, generations, chunk_size, str(out_root),
                     args.movement, args.p_move, model_params,
                     args.record_phases_seed, record_phases_gens,
-                    args.consider_move_prob,
+                    args.consider_move_prob, args.individual_log_interval,
                 ): seed
                 for seed in pending
             }

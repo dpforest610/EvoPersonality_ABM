@@ -116,6 +116,62 @@ def test_resolve_experiment_root_rejects_the_production_root_itself():
         mod.resolve_experiment_root(str(mod.EXPERIMENT_ROOT) + "/")
 
 
+def _small_model_params(**overrides):
+    params = dict(
+        population_size=20, rounds_per_duel=10, point_mutation_rate=0.05,
+        duplication_rate=0.02, split_rate=0.02, max_memory_depth=8, min_memory_depth=0,
+        k_mutation_std=0.05, noise_std=0.05, grid_width=6, grid_height=6, n_phases=2,
+        tau=1.0, radius=1,
+    )
+    params.update(overrides)
+    return params
+
+
+def test_run_one_seed_chunked_default_interval_matches_log_interval(tmp_path):
+    seed, agg_rows, individual_rows, summary, phase_frames, elapsed, n_chunks, gens = mod.run_one_seed_chunked(
+        seed=0, generations=5, chunk_size=5, out_root_str=str(tmp_path),
+        movement="none", p_move=None, model_params=_small_model_params(),
+        record_phases_seed=None, record_phases_gens=None,
+    )
+    # default individual_log_interval == LOG_INTERVAL (100): with only 5
+    # generations, only gen 0 is ever a multiple of it
+    gens_logged = sorted({r[0] for r in individual_rows})
+    assert gens_logged == [0]
+
+
+def test_run_one_seed_chunked_dense_individual_log_interval(tmp_path):
+    seed, agg_rows, individual_rows, summary, phase_frames, elapsed, n_chunks, gens = mod.run_one_seed_chunked(
+        seed=0, generations=5, chunk_size=5, out_root_str=str(tmp_path),
+        movement="none", p_move=None, model_params=_small_model_params(),
+        record_phases_seed=None, record_phases_gens=None, individual_log_interval=1,
+    )
+    gens_logged = sorted({r[0] for r in individual_rows})
+    assert gens_logged == [0, 1, 2, 3, 4]
+    # every generation's full population is present
+    for g in gens_logged:
+        assert len({r[1] for r in individual_rows if r[0] == g}) == 20  # population_size
+
+
+def test_individual_log_interval_never_changes_seed_summary():
+    """A dense individual log must not change seed_summary.csv -- that
+    always follows the fixed LOG_INTERVAL/STEADY_STATE_MIN_GEN cadence,
+    independent of --individual-log-interval."""
+    kwargs = dict(
+        seed=1, generations=5, chunk_size=5,
+        movement="none", p_move=None, model_params=_small_model_params(),
+        record_phases_seed=None, record_phases_gens=None,
+    )
+    import tempfile
+    with tempfile.TemporaryDirectory() as d1, tempfile.TemporaryDirectory() as d2:
+        r_sparse = mod.run_one_seed_chunked(out_root_str=d1, individual_log_interval=100, **kwargs)
+        r_dense = mod.run_one_seed_chunked(out_root_str=d2, individual_log_interval=1, **kwargs)
+        summary_sparse, summary_dense = r_sparse[3], r_dense[3]
+        assert summary_sparse.keys() == summary_dense.keys()
+        for k in summary_sparse:
+            a, b = summary_sparse[k], summary_dense[k]
+            assert a == b or (isinstance(a, float) and math.isnan(a) and math.isnan(b))
+
+
 def test_scratch_branch_is_per_condition():
     a = mod.scratch_branch_for(Path("scripts/output/scent_spatial_sweep_n1000/scent/host"))
     b = mod.scratch_branch_for(Path("scripts/output/scent_spatial_sweep_n1000/scent_low/host"))
