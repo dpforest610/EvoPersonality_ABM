@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 spec = importlib.util.spec_from_file_location(
@@ -18,6 +19,11 @@ def test_parse_gen_range():
     assert mod.parse_gen_range(None) is None
     assert mod.parse_gen_range("0-19") == set(range(0, 20))
     assert mod.parse_gen_range("5-5") == {5}
+
+
+def test_parse_gen_range_multiple_comma_separated():
+    assert mod.parse_gen_range("0-19,4980-4999") == set(range(0, 20)) | set(range(4980, 5000))
+    assert mod.parse_gen_range("1-1,3-3,5-5") == {1, 3, 5}
 
 
 def _fake_snapshot(n, rng):
@@ -82,6 +88,32 @@ def test_atomic_pickle_dump_replaces_and_leaves_no_tmp(tmp_path):
     with open(path, "rb") as f:
         assert pickle.load(f)["next_generation"] == 500
     assert [p.name for p in tmp_path.iterdir()] == ["seed_0_checkpoint.pkl"]
+
+
+def test_out_root_for_respects_experiment_root_override():
+    custom = Path("/tmp/not-production/scent_spatial_sweep_n1000_phase_recording")
+    out = mod.out_root_for("none", experiment_root=custom)
+    assert str(out).startswith(str(custom))
+    assert mod.EXPERIMENT_ROOT not in out.parents and out != mod.EXPERIMENT_ROOT
+
+
+def test_resolve_experiment_root_defaults_to_production():
+    assert mod.resolve_experiment_root(None) == mod.EXPERIMENT_ROOT
+    assert mod.resolve_experiment_root("") == mod.EXPERIMENT_ROOT
+
+
+def test_resolve_experiment_root_accepts_a_different_directory():
+    custom = "scripts/output/scent_spatial_sweep_n1000_phase_recording"
+    out = mod.resolve_experiment_root(custom)
+    assert out == Path(custom)
+    assert out.resolve() != mod.EXPERIMENT_ROOT.resolve()
+
+
+def test_resolve_experiment_root_rejects_the_production_root_itself():
+    with pytest.raises(ValueError):
+        mod.resolve_experiment_root(str(mod.EXPERIMENT_ROOT))
+    with pytest.raises(ValueError):
+        mod.resolve_experiment_root(str(mod.EXPERIMENT_ROOT) + "/")
 
 
 def test_scratch_branch_is_per_condition():

@@ -107,8 +107,24 @@ def machine_tag() -> str:
     return re.sub(r"[^A-Za-z0-9_.-]+", "-", raw).strip("-") or "unknown-machine"
 
 
-def out_root_for(movement: str, suffix: str = "") -> Path:
-    return EXPERIMENT_ROOT / (movement + suffix) / machine_tag()
+def out_root_for(movement: str, suffix: str = "", experiment_root: Path = EXPERIMENT_ROOT) -> Path:
+    return experiment_root / (movement + suffix) / machine_tag()
+
+
+def resolve_experiment_root(out_root_arg: Optional[str]) -> Path:
+    """--out-root, validated: must not resolve to the production
+    EXPERIMENT_ROOT, so a recording/presentation run (which passes
+    --out-root to a directory outside the production tree) can never be
+    pointed at production and overwrite a seed's files."""
+    if not out_root_arg:
+        return EXPERIMENT_ROOT
+    experiment_root = Path(out_root_arg)
+    if experiment_root.resolve() == EXPERIMENT_ROOT.resolve():
+        raise ValueError(
+            f"--out-root {experiment_root} is the production root ({EXPERIMENT_ROOT}); "
+            "pass a different directory so recording runs can never overwrite production seed files"
+        )
+    return experiment_root
 
 
 def agg_path_for(out_root, seed):
@@ -319,10 +335,15 @@ def write_summary_csv(path: Path, summary: dict) -> None:
 
 
 def parse_gen_range(spec: Optional[str]) -> Optional[set]:
+    """'lo-hi' (inclusive), or several such ranges separated by commas
+    (e.g. '0-19,4980-4999') -- the union of all of them."""
     if not spec:
         return None
-    lo, hi = spec.split("-")
-    return set(range(int(lo), int(hi) + 1))
+    out: set = set()
+    for part in spec.split(","):
+        lo, hi = part.split("-")
+        out |= set(range(int(lo), int(hi) + 1))
+    return out
 
 
 def _atomic_pickle_dump(path: Path, obj) -> None:
@@ -491,9 +512,12 @@ def write_individual_csv_gz(path: Path, rows: List[IndividualRow]) -> None:
 
 def write_phase_recording_gz(path: Path, phase_frames: dict) -> None:
     """Pickled+gzipped (not CSV): phase_frames is {generation: {"frames":
-    [(phase_idx, positions, moved), ...], "k_out": [...], "k_self":
-    [...]}}. Local-only, same as the raw individual log -- this is
-    presentation material, not analysis input."""
+    [(phase_idx, positions, moved, payoff_so_far), ...], "k_out": [...],
+    "k_self": [...]}}. payoff_so_far is the per-agent running per-round
+    payoff this generation as of that phase (NaN for an agent with no
+    duels yet) -- the same value `_mean_neighbor_payoff` scores scent
+    candidates with. Local-only, same as the raw individual log -- this
+    is presentation material, not analysis input."""
     with gzip.open(path, "wb") as f:
         pickle.dump(phase_frames, f)
 
@@ -604,10 +628,16 @@ def parse_args():
     p.add_argument("--no-push", action="store_true")
     p.add_argument("--pilot", action="store_true", help="3 seeds, 1000 gens, chunk-size 250, no push")
     p.add_argument("--out-suffix", type=str, default="")
+    p.add_argument("--out-root", type=str, default=None,
+                   help="override the experiment root directory (default: "
+                        f"{EXPERIMENT_ROOT}); use a path outside the production tree "
+                        "(e.g. for phase/presentation recording) so it can never collide "
+                        "with or overwrite production seed files")
     p.add_argument("--record-phases-seed", type=int, default=None,
                    help="if set, record every phase (not just per-generation) for this one seed")
     p.add_argument("--record-phases-gens", type=str, default=None,
-                   help="generation range 'lo-hi' (inclusive) to phase-record, e.g. '0-19'; "
+                   help="generation range(s) 'lo-hi' (inclusive) to phase-record, comma-separated "
+                        "for more than one, e.g. '0-19' or '0-19,4980-4999'; "
                         "required if --record-phases-seed is set")
     p.add_argument("--consider-move-prob", type=float, default=None,
                    help="q: 'rarely moves' gate -- each phase, each agent only even considers "
@@ -625,6 +655,11 @@ def main():
         print("ERROR: --record-phases-seed requires --record-phases-gens", file=sys.stderr)
         sys.exit(1)
     record_phases_gens = parse_gen_range(args.record_phases_gens)
+    try:
+        experiment_root = resolve_experiment_root(args.out_root)
+    except ValueError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        sys.exit(1)
 
     model_params = dict(PARAMS)
     model_params["grid_width"] = args.grid_width
@@ -637,13 +672,13 @@ def main():
         seeds = list(range(min(3, args.n_seeds)) if args.n_seeds != len(SEEDS) else range(3))
         generations = args.generations if args.generations != GENERATIONS else 1000
         chunk_size = 250
-        out_root = out_root_for(args.movement, suffix="_pilot" + args.out_suffix)
+        out_root = out_root_for(args.movement, suffix="_pilot" + args.out_suffix, experiment_root=experiment_root)
         do_push = False
     else:
         seeds = list(range(args.n_seeds))
         generations = args.generations
         chunk_size = args.chunk_size
-        out_root = out_root_for(args.movement, suffix=args.out_suffix)
+        out_root = out_root_for(args.movement, suffix=args.out_suffix, experiment_root=experiment_root)
         do_push = not args.no_push
 
     push_checkpoints = do_push and args.push_checkpoints

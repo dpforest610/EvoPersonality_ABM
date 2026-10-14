@@ -189,10 +189,15 @@ def test_phase_recording_captures_one_entry_per_phase_for_requested_generations(
     assert sorted(recorder.keys()) == [1, 3]
     for gen in (1, 3):
         assert len(recorder[gen]) == 3  # n_phases
-        for phase_idx, positions, moved in recorder[gen]:
+        for phase_idx, positions, moved, payoff_so_far in recorder[gen]:
             assert len(positions) == 20
             assert len(moved) == 20
+            assert len(payoff_so_far) == 20
             assert all(isinstance(p, tuple) and len(p) == 2 for p in positions)
+            # non-isolated agents by the last phase should have a real
+            # (non-NaN) running payoff-so-far
+            if phase_idx == 2:
+                assert sum(1 for v in payoff_so_far if v == v) > 0
 
 
 def test_phase_recording_moved_flags_are_false_for_m0():
@@ -202,8 +207,24 @@ def test_phase_recording_moved_flags_are_false_for_m0():
         grid_width=6, grid_height=6, movement="none", seed=2,
         record_phases_for_generations={1}, phase_recorder_out=recorder,
     )
-    for _, _, moved in recorder[1]:
+    for _, _, moved, _ in recorder[1]:
         assert not any(moved)
+
+
+def test_phase_recording_last_phase_payoff_matches_generation_payoffs():
+    recorder = {}
+    stats = run_coupled_evolution_scent(
+        population_size=20, generations=5, rounds_per_duel=12, n_phases=3,
+        grid_width=6, grid_height=6, movement="scent", tau=1.0, seed=2,
+        record_phases_for_generations={1, 3}, phase_recorder_out=recorder,
+    )
+    for gen in (1, 3):
+        last_phase_idx, _, _, payoff_so_far = recorder[gen][-1]
+        assert last_phase_idx == 2  # n_phases - 1
+        gen_payoffs = stats[gen].payoffs
+        for v, p in zip(payoff_so_far, gen_payoffs):
+            if v == v:  # not NaN -> agent had at least one duel
+                assert v == pytest.approx(p)
 
 
 def test_phase_recording_requires_recorder_out():

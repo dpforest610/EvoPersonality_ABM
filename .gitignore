@@ -15,6 +15,7 @@ scripts/output/**/*_checkpoint.pkl
 scripts/output/**/.run.lock
 scripts/output/scent_spatial_sweep_n1000/**/*_individual_log.csv.gz
 scripts/output/scent_spatial_sweep_n1000/**/*_phase_recording.pkl.gz
+scripts/output/scent_spatial_sweep_n1000_phase_recording/
 venv/
 .venv/
 logs/

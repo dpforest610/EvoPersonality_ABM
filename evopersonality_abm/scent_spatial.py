@@ -244,10 +244,13 @@ def _run_generation(
 
     phase_callback, if given, is called once per phase (after that
     phase's duels AND movement step) as
-    phase_callback(phase_index, positions_snapshot, moved_this_phase)
+    phase_callback(phase_index, positions_snapshot, moved_this_phase, payoff_so_far)
     -- positions_snapshot is a list[Coord] indexed by agent (same
-    convention as the generation-level `positions` field) and
-    moved_this_phase a list[bool], both length population_size.
+    convention as the generation-level `positions` field), moved_this_phase
+    a list[bool], and payoff_so_far a list[float] (total_payoff[i] /
+    rounds_played[i], i.e. exactly the per-round payoff-so-far value fed
+    into `_mean_neighbor_payoff`/the scent score -- NaN for an agent with
+    no duels yet this generation), all length population_size.
     K_out/K_self are not included since genomes (and hence K_out/K_self)
     are fixed for the whole generation -- a caller recording a
     presentation trajectory already has them once per generation.
@@ -356,7 +359,11 @@ def _run_generation(
 
         if phase_callback is not None:
             positions_snapshot = [cell_of_agent[i] for i in range(population_size)]
-            phase_callback(_phase, positions_snapshot, moved_this_phase)
+            payoff_so_far = [
+                total_payoff[i] / rounds_played[i] if rounds_played[i] > 0 else float("nan")
+                for i in range(population_size)
+            ]
+            phase_callback(_phase, positions_snapshot, moved_this_phase, payoff_so_far)
 
     final_cells = [cell_of_agent[i] for i in range(population_size)]
     payoffs = [
@@ -414,7 +421,7 @@ def run_coupled_evolution_scent(
     record_parent_history: bool = False,
     return_state: bool = False,
     record_phases_for_generations: Optional[Set[int]] = None,
-    phase_recorder_out: Optional[Dict[int, List[Tuple[int, List[Coord], List[bool]]]]] = None,
+    phase_recorder_out: Optional[Dict[int, List[Tuple[int, List[Coord], List[bool], List[float]]]]] = None,
 ):
     """Chapter-3 scent-movement model -- see module docstring.
 
@@ -440,7 +447,7 @@ def run_coupled_evolution_scent(
     a generation. When given, phase_recorder_out (a plain dict) must
     also be given; for each requested generation it is populated with
     phase_recorder_out[gen] = [(phase_index, positions_snapshot,
-    moved_this_phase), ...], one tuple per phase (see
+    moved_this_phase, payoff_so_far), ...], one tuple per phase (see
     `_run_generation`'s phase_callback docstring for the snapshot
     format). K_out/K_self are not duplicated per phase since genomes
     are fixed for the whole generation -- read them once from that
@@ -486,11 +493,11 @@ def run_coupled_evolution_scent(
         if record_phases_for_generations is not None and gen in record_phases_for_generations:
             if phase_recorder_out is None:
                 raise ValueError("phase_recorder_out must be given when record_phases_for_generations is set")
-            gen_frames: List[Tuple[int, List[Coord], List[bool]]] = []
+            gen_frames: List[Tuple[int, List[Coord], List[bool], List[float]]] = []
             phase_recorder_out[gen] = gen_frames
 
-            def phase_callback(phase_idx, positions_snapshot, moved_this_phase, _frames=gen_frames):
-                _frames.append((phase_idx, list(positions_snapshot), list(moved_this_phase)))
+            def phase_callback(phase_idx, positions_snapshot, moved_this_phase, payoff_so_far, _frames=gen_frames):
+                _frames.append((phase_idx, list(positions_snapshot), list(moved_this_phase), list(payoff_so_far)))
 
         (
             payoffs, final_cells, edges, cooperation_rate, isolated_fraction, move_rate,
