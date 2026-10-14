@@ -339,7 +339,10 @@ N=100 の値は、コミット済みの100個体版生ログから `scripts/anal
     python3 scripts/analyze_scent_production_n1000.py
 
 を実行すれば、`.csv.gz` を自動で見つけて、5条件の孤立除外版 β_ctx と、M2 vs M1・M2-low vs M1-low の
-Mann-Whitney U を `results.json` の `exploratory.isolated_sensitivity.n1000` に書き出す。
+Mann-Whitney U を `results.json` の `deviation_isolated.n1000` に書き出す。
+
+**2026-10-14 追記:** 孤立個体の扱いは `docs/DEVIATION_isolated_agents.md` で決定済み(N=1000 の除外版の値を見る前に決定)。
+主要検定 A・A2 の正式な値は除外版とする。この文書は、N=1000 の除外版の結果が届いてから、その決定に沿って更新する。
 
 ### E2. 事前登録4節のANCOVAを1000個体版で当てはめ直したもの
 
@@ -354,7 +357,7 @@ k_out_assortativity ~ 1 + is_scent + move_rate(OLS、シード内平均、n=60)
 | | is_scent | **−0.062713** | [−0.103522, −0.021903] | 0.0032 |
 | | move_rate | +3.235842 | [+0.304030, +6.167654] | 0.031 |
 
-第2群では、move_rate と is_scent がほとんど分かれていない(M1-low 約0.036、M2-low 約0.050、群の中のばらつきは小さい)。
+**第2群の ANCOVA は解釈しない**(`docs/DEVIATION_isolated_agents.md` 決定6)。第2群では、move_rate と is_scent がほとんど分かれていない(M1-low 約0.036、M2-low 約0.050、群の中のばらつきは小さい)。
 そのため、両係数の推定は互いに強く依存している。
 
 ---

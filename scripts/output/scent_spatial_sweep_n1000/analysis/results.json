@@ -540,50 +540,6 @@
     }
   },
   "exploratory": {
-    "isolated_sensitivity": {
-      "n100": {
-        "per_condition": {
-          "M0": {
-            "gens_with_isolated_fraction": 0.19066666666666668,
-            "beta_ctx_kout_as_registered": -0.001029495540799537,
-            "beta_ctx_kout_isolated_excluded": -0.002191469415391022,
-            "beta_ctx_kself_isolated_excluded": 0.012273947402428277
-          },
-          "M1": {
-            "gens_with_isolated_fraction": 0.0,
-            "beta_ctx_kout_as_registered": 0.0008491730694865651,
-            "beta_ctx_kout_isolated_excluded": 0.0008491730694865651,
-            "beta_ctx_kself_isolated_excluded": 0.007558349117691439
-          },
-          "M2": {
-            "gens_with_isolated_fraction": 0.0,
-            "beta_ctx_kout_as_registered": 0.0006017076343589661,
-            "beta_ctx_kout_isolated_excluded": 0.0006017076343589661,
-            "beta_ctx_kself_isolated_excluded": 0.0074770364088216044
-          }
-        },
-        "tests": {
-          "M2 vs M1": {
-            "U": 1293.0,
-            "p": 0.7695318249152246,
-            "r": -0.034399999999999986,
-            "median_x": 0.0006017076343589661,
-            "median_y": 0.0008491730694865651,
-            "stars": "n.s."
-          }
-        }
-      },
-      "n1000": {
-        "per_condition": {
-          "M0": null,
-          "M1": null,
-          "M2": null,
-          "M1-low": null,
-          "M2-low": null
-        },
-        "tests": {}
-      }
-    },
     "prediction_all5": {
       "M0": {
         "x0": 0.44382149599999965,
@@ -698,6 +654,2919 @@
           "p": 0.03112717100981925
         }
       }
+    }
+  },
+  "deviation_isolated": {
+    "n100": {
+      "per_seed": {
+        "M0": [
+          {
+            "as_registered": {
+              "beta_self_kself": 0.005253478699573122,
+              "beta_self_kout": -0.0011904540765707754,
+              "beta_ctx_kself": 0.009872633762626867,
+              "beta_ctx_kout": -0.0010241016353922925
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.00432290094654677,
+              "beta_self_kout": -0.0011904540765707754,
+              "beta_ctx_kself": 0.01406438188290322,
+              "beta_ctx_kout": -0.0031910233391749523
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 8
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.008009861545333286,
+              "beta_self_kout": 0.004553950941862915,
+              "beta_ctx_kself": 0.003961441809565169,
+              "beta_ctx_kout": -0.0014490140597506716
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.006643722498128287,
+              "beta_self_kout": 0.0024929701136515462,
+              "beta_ctx_kself": 0.011812354046769427,
+              "beta_ctx_kout": -0.001914262162863902
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 5
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.009009202121124056,
+              "beta_self_kout": -0.0016671643536033242,
+              "beta_ctx_kself": 0.011073479093974093,
+              "beta_ctx_kout": -0.005437590730708661
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.009009202121124056,
+              "beta_self_kout": -0.0016671643536033242,
+              "beta_ctx_kself": 0.011073479093974093,
+              "beta_ctx_kout": -0.0058790458721064195
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 1
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.0067161519246160695,
+              "beta_self_kout": 0.0004757621098085298,
+              "beta_ctx_kself": 0.007275166723447813,
+              "beta_ctx_kout": -0.0009868187171664516
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.0067161519246160695,
+              "beta_self_kout": 0.0013873377915217568,
+              "beta_ctx_kself": 0.007919023575509032,
+              "beta_ctx_kout": -0.0032385755398660135
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 4
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.00583036763598092,
+              "beta_self_kout": -0.002081475110637333,
+              "beta_ctx_kself": 0.00948636214330718,
+              "beta_ctx_kout": 0.0005944356618296892
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.006469103876792415,
+              "beta_self_kout": -0.002081475110637333,
+              "beta_ctx_kself": 0.009568297427408595,
+              "beta_ctx_kout": 0.000684326879632049
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 2
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.003038273814395423,
+              "beta_self_kout": 0.005385013765105232,
+              "beta_ctx_kself": 0.008735420073668015,
+              "beta_ctx_kout": -0.0036403993441496496
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.0026780816329853197,
+              "beta_self_kout": 0.00625541520736735,
+              "beta_ctx_kself": 0.013827067481393776,
+              "beta_ctx_kout": -0.006596631227055101
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 5
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.008033417903358535,
+              "beta_self_kout": 0.0032825218433785303,
+              "beta_ctx_kself": 0.01001485029750479,
+              "beta_ctx_kout": 0.0
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.006371278530935692,
+              "beta_self_kout": 0.0032825218433785303,
+              "beta_ctx_kself": 0.013760929055427706,
+              "beta_ctx_kout": -0.0021850938627669403
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 8
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.0023652506442028206,
+              "beta_self_kout": -0.0034273931727088645,
+              "beta_ctx_kself": 0.007258086731708656,
+              "beta_ctx_kout": -0.0010348894462067814
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.002321623408129351,
+              "beta_self_kout": -0.0034273931727088645,
+              "beta_ctx_kself": 0.010133564544475109,
+              "beta_ctx_kout": -0.0025078035303878355
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 9
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.0011913406973520764,
+              "beta_self_kout": -0.0005542042294074247,
+              "beta_ctx_kself": 0.013539828361749166,
+              "beta_ctx_kout": -0.0005493875960805792
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.0007731677107164067,
+              "beta_self_kout": -0.00035888945723781286,
+              "beta_ctx_kself": 0.01919818426389332,
+              "beta_ctx_kout": -0.0005250250823628299
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 3
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.007966809553010193,
+              "beta_self_kout": 0.0016662310225953663,
+              "beta_ctx_kself": 0.013137679366190574,
+              "beta_ctx_kout": -0.0017084238490597974
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.008796650183453027,
+              "beta_self_kout": 0.0016662310225953663,
+              "beta_ctx_kself": 0.01420706840674614,
+              "beta_ctx_kout": -0.0030071764841272594
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 6
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.0021842272161405572,
+              "beta_self_kout": 0.004966778180881818,
+              "beta_ctx_kself": 0.008042220394363515,
+              "beta_ctx_kout": -0.006413913447096287
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.0006492915194173345,
+              "beta_self_kout": 0.005183606244051536,
+              "beta_ctx_kself": 0.01168367424169394,
+              "beta_ctx_kout": -0.006860025678025917
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 5
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.007910118402339829,
+              "beta_self_kout": 0.002628088648031753,
+              "beta_ctx_kself": 0.009829851525023268,
+              "beta_ctx_kout": -0.0030495223582166003
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.00700979858593351,
+              "beta_self_kout": 0.0025512573561294115,
+              "beta_ctx_kself": 0.010872994330432836,
+              "beta_ctx_kout": -0.0034354453623270035
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 5
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.008982090207182013,
+              "beta_self_kout": 0.000754295647103799,
+              "beta_ctx_kself": 0.010052085621891589,
+              "beta_ctx_kout": 0.0011993072564184825
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.008470458547197,
+              "beta_self_kout": 0.0005118159312144941,
+              "beta_ctx_kself": 0.01070423013027192,
+              "beta_ctx_kout": 0.0021921127952439904
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 3
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.00924770241628195,
+              "beta_self_kout": -0.0009618571233894005,
+              "beta_ctx_kself": 0.010722478487488401,
+              "beta_ctx_kout": 0.0
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.008676806261080458,
+              "beta_self_kout": -0.0015676748682174114,
+              "beta_ctx_kself": 0.015588041365154548,
+              "beta_ctx_kout": 0.0005301330960986819
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 6
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": -0.0009916462375072401,
+              "beta_self_kout": 0.00035225977958719607,
+              "beta_ctx_kself": 0.010363126102569174,
+              "beta_ctx_kout": -0.003216853973731862
+            },
+            "isolated_excluded": {
+              "beta_self_kself": -0.0012659620779911594,
+              "beta_self_kout": -0.0006506234636752072,
+              "beta_ctx_kself": 0.014960869597406813,
+              "beta_ctx_kout": -0.0047339218885253595
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 7
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": -0.002909436727493895,
+              "beta_self_kout": 0.0010276842818687146,
+              "beta_ctx_kself": 0.017205817998851326,
+              "beta_ctx_kout": -0.00247194742796626
+            },
+            "isolated_excluded": {
+              "beta_self_kself": -0.004099484049810316,
+              "beta_self_kout": 0.0007268230109226776,
+              "beta_ctx_kself": 0.02246091587698542,
+              "beta_ctx_kout": -0.003970227302561507
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 8
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.01156272259755933,
+              "beta_self_kout": -0.0018182542822101654,
+              "beta_ctx_kself": 0.002820229867735236,
+              "beta_ctx_kout": -0.0011200705939764344
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.010102855072716393,
+              "beta_self_kout": -0.0005505514518160833,
+              "beta_ctx_kself": 0.007508621878776091,
+              "beta_ctx_kout": -0.00338812188623045
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 7
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.00703024720906463,
+              "beta_self_kout": 0.004993964583694544,
+              "beta_ctx_kself": 0.015781741167893153,
+              "beta_ctx_kout": 0.0
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.004664344431260714,
+              "beta_self_kout": 0.006736485231595035,
+              "beta_ctx_kself": 0.01609122494480504,
+              "beta_ctx_kout": -0.0020617449390473675
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 7
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": -0.00012729324058080325,
+              "beta_self_kout": 0.003765392847490882,
+              "beta_ctx_kself": 0.013950639038435367,
+              "beta_ctx_kout": -0.006098413587413166
+            },
+            "isolated_excluded": {
+              "beta_self_kself": -0.0007740130395890628,
+              "beta_self_kout": 0.003934512837476536,
+              "beta_ctx_kself": 0.014347388241759549,
+              "beta_ctx_kout": -0.006552239969249176
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 4
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.0008251971480760789,
+              "beta_self_kout": -0.0011101202316939097,
+              "beta_ctx_kself": 0.013637323887334126,
+              "beta_ctx_kout": -0.004717898099139112
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 9.383201749819952e-05,
+              "beta_self_kout": -0.0009849951567930794,
+              "beta_ctx_kself": 0.015431880289101123,
+              "beta_ctx_kout": -0.006529073276871021
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 6
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.0015345163961315855,
+              "beta_self_kout": 0.003474367965322176,
+              "beta_ctx_kself": 0.017784101446187736,
+              "beta_ctx_kout": -0.002376709804238154
+            },
+            "isolated_excluded": {
+              "beta_self_kself": -0.00031433845810588786,
+              "beta_self_kout": 0.0019589777934481594,
+              "beta_ctx_kself": 0.017784101446187736,
+              "beta_ctx_kout": -0.0028604179579318385
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 6
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.009983943438161015,
+              "beta_self_kout": -0.006890500583268342,
+              "beta_ctx_kself": 0.011567174370773432,
+              "beta_ctx_kout": 0.005990084385204708
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.009306766374590818,
+              "beta_self_kout": -0.007251996700749278,
+              "beta_ctx_kself": 0.013938197551336727,
+              "beta_ctx_kout": 0.010350908711502193
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 8
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.007667999746835083,
+              "beta_self_kout": 0.004517173881400369,
+              "beta_ctx_kself": 0.008354446668971957,
+              "beta_ctx_kout": -0.0025689000023164607
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.006577039419226469,
+              "beta_self_kout": 0.005630225815862511,
+              "beta_ctx_kself": 0.008965691192538752,
+              "beta_ctx_kout": -0.0036813597725740776
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 6
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.006529002417211077,
+              "beta_self_kout": 0.0027749571729245286,
+              "beta_ctx_kself": 0.007934294591298768,
+              "beta_ctx_kout": -0.0015169480321901734
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.006529002417211077,
+              "beta_self_kout": 0.0037418087138516446,
+              "beta_ctx_kself": 0.015102305204331609,
+              "beta_ctx_kout": -0.005287724745729012
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 5
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.000609862632749953,
+              "beta_self_kout": 0.001381911357347256,
+              "beta_ctx_kself": 0.010154830252948244,
+              "beta_ctx_kout": -0.001035781115368804
+            },
+            "isolated_excluded": {
+              "beta_self_kself": -0.00013568266679034633,
+              "beta_self_kout": 0.0019020397381226707,
+              "beta_ctx_kself": 0.013183499692796138,
+              "beta_ctx_kout": -0.0020813245217421537
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 7
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.0006602875794776077,
+              "beta_self_kout": -0.0023253800686125195,
+              "beta_ctx_kself": 0.011102577428691984,
+              "beta_ctx_kout": -0.0014296328423239828
+            },
+            "isolated_excluded": {
+              "beta_self_kself": -0.0014062366738408422,
+              "beta_self_kout": -0.0018651144858993413,
+              "beta_ctx_kself": 0.014822752923677747,
+              "beta_ctx_kout": -0.0053081758266095
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 7
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.00926002229688266,
+              "beta_self_kout": -2.5575420407185638e-05,
+              "beta_ctx_kself": 0.012131603720669569,
+              "beta_ctx_kout": -2.0696444745073756e-05
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.00777422862260275,
+              "beta_self_kout": -2.5575420407185638e-05,
+              "beta_ctx_kself": 0.016108832955697226,
+              "beta_ctx_kout": -0.001007151478264242
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 5
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.007038095814161267,
+              "beta_self_kout": -0.0015261841302522464,
+              "beta_ctx_kself": 0.00890987752107874,
+              "beta_ctx_kout": 0.0
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.007233214212947054,
+              "beta_self_kout": -0.002229437028068715,
+              "beta_ctx_kself": 0.010259828323477238,
+              "beta_ctx_kout": 0.0003940132238956602
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 5
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.0009499081100662933,
+              "beta_self_kout": -0.002097055148066092,
+              "beta_ctx_kself": 0.014780156736142563,
+              "beta_ctx_kout": -7.334082239681773e-05
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.0007334165710284096,
+              "beta_self_kout": -0.0014982244071522826,
+              "beta_ctx_kself": 0.01582398398370736,
+              "beta_ctx_kout": -0.0017269588314483305
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 6
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.008587493240863822,
+              "beta_self_kout": 0.001585567377777596,
+              "beta_ctx_kself": 0.008474362137273728,
+              "beta_ctx_kout": 0.0002951321217199428
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.0071840796165233665,
+              "beta_self_kout": 0.002104916490416736,
+              "beta_ctx_kself": 0.010853273187851637,
+              "beta_ctx_kout": 0.0007845869319787434
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 5
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.0075984301739598185,
+              "beta_self_kout": 0.0012162675001771146,
+              "beta_ctx_kself": 0.0076340753999937245,
+              "beta_ctx_kout": 0.0
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.006721421315857103,
+              "beta_self_kout": 0.0012162675001771146,
+              "beta_ctx_kself": 0.009087744347888565,
+              "beta_ctx_kout": -0.0009714282759172676
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 6
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.0051705029552664115,
+              "beta_self_kout": 0.0029527540031497983,
+              "beta_ctx_kself": 0.007864021137629192,
+              "beta_ctx_kout": -0.0013603699672255424
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.004576989495673771,
+              "beta_self_kout": 0.0018849705724237585,
+              "beta_ctx_kself": 0.009222239619651433,
+              "beta_ctx_kout": -0.0015270604083779168
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 5
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.003303345172260186,
+              "beta_self_kout": 0.001723136632342152,
+              "beta_ctx_kself": 0.010611821252242793,
+              "beta_ctx_kout": -0.0008129511642719601
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.0029165852737930292,
+              "beta_self_kout": 0.001575891840927743,
+              "beta_ctx_kself": 0.011057600899477027,
+              "beta_ctx_kout": -0.001657844614028208
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 2
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.01195013810440331,
+              "beta_self_kout": 0.000578362413707754,
+              "beta_ctx_kself": 0.01343039443336239,
+              "beta_ctx_kout": 0.00030169883966358333
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.009893282672186641,
+              "beta_self_kout": 0.0007552904665407227,
+              "beta_ctx_kself": 0.01614201122077854,
+              "beta_ctx_kout": 0.0018138645999383972
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 6
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.0002473118995572235,
+              "beta_self_kout": -0.0009084623858228124,
+              "beta_ctx_kself": 0.005564712322300683,
+              "beta_ctx_kout": 0.0
+            },
+            "isolated_excluded": {
+              "beta_self_kself": -0.0005382263169549483,
+              "beta_self_kout": 0.0011088468502635398,
+              "beta_ctx_kself": 0.00923648455247945,
+              "beta_ctx_kout": 0.0015573113523028093
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 8
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.007225498803671685,
+              "beta_self_kout": 0.0015647607215564532,
+              "beta_ctx_kself": 0.011567734694221527,
+              "beta_ctx_kout": 0.0004513399965177477
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.007066862156086495,
+              "beta_self_kout": 0.002018390256395597,
+              "beta_ctx_kself": 0.012371966939532485,
+              "beta_ctx_kout": 0.0004513399965177477
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 2
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.011367296977963303,
+              "beta_self_kout": 0.00311186159034525,
+              "beta_ctx_kself": 0.00651189623931064,
+              "beta_ctx_kout": -0.00019658062374968113
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.01047812201153345,
+              "beta_self_kout": 0.004278842047397853,
+              "beta_ctx_kself": 0.00889772401279056,
+              "beta_ctx_kout": -0.002197844968015104
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 8
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.004387354838767295,
+              "beta_self_kout": 0.00020590615382119802,
+              "beta_ctx_kself": 0.007079572846624459,
+              "beta_ctx_kout": 0.0
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.004387354838767295,
+              "beta_self_kout": 0.00020590615382119802,
+              "beta_ctx_kself": 0.008691699011875328,
+              "beta_ctx_kout": -0.0005359880850995126
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 7
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.008147459404468222,
+              "beta_self_kout": 0.00479399238640372,
+              "beta_ctx_kself": 0.0106575705268252,
+              "beta_ctx_kout": -0.0035881562091481375
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.007284610329584558,
+              "beta_self_kout": 0.004816775088306878,
+              "beta_ctx_kself": 0.011624348607520684,
+              "beta_ctx_kout": -0.004749283871693327
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 4
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.007919616247813763,
+              "beta_self_kout": -0.0006796935259254627,
+              "beta_ctx_kself": 0.012359082503567053,
+              "beta_ctx_kout": -0.00040749605664605566
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.007596120041407101,
+              "beta_self_kout": 0.00025556561580810587,
+              "beta_ctx_kself": 0.013189790319258262,
+              "beta_ctx_kout": -0.0008413858536888874
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 5
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.006983982959807714,
+              "beta_self_kout": 0.0035755223175233425,
+              "beta_ctx_kself": 0.011816562835443446,
+              "beta_ctx_kout": -0.002214792006983905
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.006983982959807714,
+              "beta_self_kout": 0.004412150077901305,
+              "beta_ctx_kself": 0.013653869999112039,
+              "beta_ctx_kout": -0.003091171791830033
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 6
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.005459893254332517,
+              "beta_self_kout": -0.0005047049935535133,
+              "beta_ctx_kself": 0.007589676103935984,
+              "beta_ctx_kout": -0.0007481411314617729
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.0051413843996175965,
+              "beta_self_kout": -0.0013783054378152487,
+              "beta_ctx_kself": 0.00930379579456169,
+              "beta_ctx_kout": -0.0013846040915410438
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 5
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.005305389147540956,
+              "beta_self_kout": 0.002419148240243721,
+              "beta_ctx_kself": 0.006456050134741674,
+              "beta_ctx_kout": -0.002565275862724151
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.004684362791186751,
+              "beta_self_kout": 0.002419148240243721,
+              "beta_ctx_kself": 0.009921139794686304,
+              "beta_ctx_kout": -0.004866713993125526
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 5
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.004567963998683181,
+              "beta_self_kout": 0.003327575969120299,
+              "beta_ctx_kself": 0.007836274335323332,
+              "beta_ctx_kout": -0.0028980608170253988
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.004783304771901826,
+              "beta_self_kout": 0.003004850151358757,
+              "beta_ctx_kself": 0.012175927865324069,
+              "beta_ctx_kout": -0.004153594476476267
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 7
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.008814266194100778,
+              "beta_self_kout": 0.0018275490885760553,
+              "beta_ctx_kself": 0.006416642774446472,
+              "beta_ctx_kout": -0.0036027126862019842
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.0072747617437684455,
+              "beta_self_kout": 0.0018275490885760553,
+              "beta_ctx_kself": 0.00739702418663811,
+              "beta_ctx_kout": -0.005092047600886571
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 6
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.007242620113875251,
+              "beta_self_kout": 0.0007633085236070634,
+              "beta_ctx_kself": 0.004690854355480604,
+              "beta_ctx_kout": 2.6028812379346013e-05
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.0057313180183455196,
+              "beta_self_kout": 0.000739439042962854,
+              "beta_ctx_kself": 0.012163007815179165,
+              "beta_ctx_kout": 0.005621260638009158
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 10
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.008165752756417533,
+              "beta_self_kout": 0.0029810339212965223,
+              "beta_ctx_kself": 0.005923399403317925,
+              "beta_ctx_kout": -0.0004584338953473595
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.008091572168411703,
+              "beta_self_kout": 0.0029810339212965223,
+              "beta_ctx_kself": 0.007236049396874715,
+              "beta_ctx_kout": -0.0017445436912879395
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 6
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.0026771968265984847,
+              "beta_self_kout": 0.004292291345104086,
+              "beta_ctx_kself": 0.01013887978124027,
+              "beta_ctx_kout": -0.00864477509180401
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.000855043345767223,
+              "beta_self_kout": 0.003686405132116718,
+              "beta_ctx_kself": 0.013005103154358134,
+              "beta_ctx_kout": -0.010211303637940278
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 5
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.007003119231647911,
+              "beta_self_kout": 0.0002165398315511959,
+              "beta_ctx_kself": 0.011983235442242012,
+              "beta_ctx_kout": -0.004716292809783234
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.003626595323788475,
+              "beta_self_kout": 0.00032574946548672947,
+              "beta_ctx_kself": 0.013956203359225063,
+              "beta_ctx_kout": -0.005465714758608666
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 6
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.0050205414012961976,
+              "beta_self_kout": 0.002081861975939526,
+              "beta_ctx_kself": 0.01007796475488195,
+              "beta_ctx_kout": 0.0
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.0038091893113626606,
+              "beta_self_kout": 0.0004341814709966023,
+              "beta_ctx_kself": 0.016157709651755593,
+              "beta_ctx_kout": 0.001431008631824808
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 8
+          }
+        ],
+        "M1": [
+          {
+            "as_registered": {
+              "beta_self_kself": 0.006006433036894053,
+              "beta_self_kout": 0.00066581837026568,
+              "beta_ctx_kself": 0.007318443711445106,
+              "beta_ctx_kout": -0.0033297983826515547
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.006006433036894053,
+              "beta_self_kout": 0.00066581837026568,
+              "beta_ctx_kself": 0.007318443711445106,
+              "beta_ctx_kout": -0.0033297983826515547
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.00885595015435596,
+              "beta_self_kout": 0.00012978989417218752,
+              "beta_ctx_kself": 0.007552955290190174,
+              "beta_ctx_kout": 0.00019998195406228253
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.00885595015435596,
+              "beta_self_kout": 0.00012978989417218752,
+              "beta_ctx_kself": 0.007552955290190174,
+              "beta_ctx_kout": 0.00019998195406228253
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.00992944601678089,
+              "beta_self_kout": 0.0047419671965420376,
+              "beta_ctx_kself": 0.00667796974451889,
+              "beta_ctx_kout": -0.002251236447155333
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.00992944601678089,
+              "beta_self_kout": 0.0047419671965420376,
+              "beta_ctx_kself": 0.00667796974451889,
+              "beta_ctx_kout": -0.002251236447155333
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.00622411481648987,
+              "beta_self_kout": 0.006023881311229098,
+              "beta_ctx_kself": -0.004960729364096427,
+              "beta_ctx_kout": 0.0020424874434135116
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.00622411481648987,
+              "beta_self_kout": 0.006023881311229098,
+              "beta_ctx_kself": -0.004960729364096427,
+              "beta_ctx_kout": 0.0020424874434135116
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.0036685234883725116,
+              "beta_self_kout": 0.0015354837423687414,
+              "beta_ctx_kself": 0.012156841339411242,
+              "beta_ctx_kout": -0.000539536955968649
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.0036685234883725116,
+              "beta_self_kout": 0.0015354837423687414,
+              "beta_ctx_kself": 0.012156841339411242,
+              "beta_ctx_kout": -0.000539536955968649
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.0054609432476938075,
+              "beta_self_kout": -0.00010196387497673242,
+              "beta_ctx_kself": 0.012728052635130289,
+              "beta_ctx_kout": 0.0008961362564350662
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.0054609432476938075,
+              "beta_self_kout": -0.00010196387497673242,
+              "beta_ctx_kself": 0.012728052635130289,
+              "beta_ctx_kout": 0.0008961362564350662
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.010661884061579398,
+              "beta_self_kout": -0.003084222945549154,
+              "beta_ctx_kself": 0.010965811783074795,
+              "beta_ctx_kout": 0.0014096241609155998
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.010661884061579398,
+              "beta_self_kout": -0.003084222945549154,
+              "beta_ctx_kself": 0.010965811783074795,
+              "beta_ctx_kout": 0.0014096241609155998
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.011042412390996088,
+              "beta_self_kout": 0.003960879874261725,
+              "beta_ctx_kself": 0.005110601788472422,
+              "beta_ctx_kout": 0.0018394834635050445
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.011042412390996088,
+              "beta_self_kout": 0.003960879874261725,
+              "beta_ctx_kself": 0.005110601788472422,
+              "beta_ctx_kout": 0.0018394834635050445
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.009114641202723775,
+              "beta_self_kout": 0.0018739615755608112,
+              "beta_ctx_kself": 0.013294421573599127,
+              "beta_ctx_kout": 0.001231784791826838
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.009114641202723775,
+              "beta_self_kout": 0.0018739615755608112,
+              "beta_ctx_kself": 0.013294421573599127,
+              "beta_ctx_kout": 0.001231784791826838
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.0064478940599109495,
+              "beta_self_kout": 0.0031373132271407594,
+              "beta_ctx_kself": 0.007947908098945519,
+              "beta_ctx_kout": -0.0001764133935936485
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.0064478940599109495,
+              "beta_self_kout": 0.0031373132271407594,
+              "beta_ctx_kself": 0.007947908098945519,
+              "beta_ctx_kout": -0.0001764133935936485
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.010810879303779355,
+              "beta_self_kout": 0.004449123063061446,
+              "beta_ctx_kself": 0.00913471131352152,
+              "beta_ctx_kout": -0.0026470970150926287
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.010810879303779355,
+              "beta_self_kout": 0.004449123063061446,
+              "beta_ctx_kself": 0.00913471131352152,
+              "beta_ctx_kout": -0.0026470970150926287
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.007642735632774376,
+              "beta_self_kout": 0.0009471029401153359,
+              "beta_ctx_kself": 0.009426833615314314,
+              "beta_ctx_kout": -0.0015532236967781702
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.007642735632774376,
+              "beta_self_kout": 0.0009471029401153359,
+              "beta_ctx_kself": 0.009426833615314314,
+              "beta_ctx_kout": -0.0015532236967781702
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.007053341443696589,
+              "beta_self_kout": 0.00574738830468911,
+              "beta_ctx_kself": 0.003977468669815687,
+              "beta_ctx_kout": 0.0010396874518936799
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.007053341443696589,
+              "beta_self_kout": 0.00574738830468911,
+              "beta_ctx_kself": 0.003977468669815687,
+              "beta_ctx_kout": 0.0010396874518936799
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.009257732890658715,
+              "beta_self_kout": 0.005815049690482271,
+              "beta_ctx_kself": 0.007563742945192703,
+              "beta_ctx_kout": 0.0009190234599928556
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.009257732890658715,
+              "beta_self_kout": 0.005815049690482271,
+              "beta_ctx_kself": 0.007563742945192703,
+              "beta_ctx_kout": 0.0009190234599928556
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.008041552944453694,
+              "beta_self_kout": 0.005712697593745055,
+              "beta_ctx_kself": -0.00470360956686286,
+              "beta_ctx_kout": 0.004207505500386843
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.008041552944453694,
+              "beta_self_kout": 0.005712697593745055,
+              "beta_ctx_kself": -0.00470360956686286,
+              "beta_ctx_kout": 0.004207505500386843
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.010231134709649602,
+              "beta_self_kout": 0.00036445780693915037,
+              "beta_ctx_kself": 0.005250697621765822,
+              "beta_ctx_kout": 9.216503494281273e-05
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.010231134709649602,
+              "beta_self_kout": 0.00036445780693915037,
+              "beta_ctx_kself": 0.005250697621765822,
+              "beta_ctx_kout": 9.216503494281273e-05
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.009020188732897777,
+              "beta_self_kout": 0.0005144613720602133,
+              "beta_ctx_kself": 0.0005436592039906138,
+              "beta_ctx_kout": 0.0022438476495166516
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.009020188732897777,
+              "beta_self_kout": 0.0005144613720602133,
+              "beta_ctx_kself": 0.0005436592039906138,
+              "beta_ctx_kout": 0.0022438476495166516
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.009451042159882144,
+              "beta_self_kout": 0.0039312283972014524,
+              "beta_ctx_kself": 0.006396393495606088,
+              "beta_ctx_kout": 0.0013161497167140524
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.009451042159882144,
+              "beta_self_kout": 0.0039312283972014524,
+              "beta_ctx_kself": 0.006396393495606088,
+              "beta_ctx_kout": 0.0013161497167140524
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.010204917240902887,
+              "beta_self_kout": 0.00447415259995501,
+              "beta_ctx_kself": -0.007238719533636789,
+              "beta_ctx_kout": 0.0013072016605360413
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.010204917240902887,
+              "beta_self_kout": 0.00447415259995501,
+              "beta_ctx_kself": -0.007238719533636789,
+              "beta_ctx_kout": 0.0013072016605360413
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.011743150220026947,
+              "beta_self_kout": 0.0005239049070319423,
+              "beta_ctx_kself": 0.006320378123122661,
+              "beta_ctx_kout": 0.002875012616731591
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.011743150220026947,
+              "beta_self_kout": 0.0005239049070319423,
+              "beta_ctx_kself": 0.006320378123122661,
+              "beta_ctx_kout": 0.002875012616731591
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.01170597618658933,
+              "beta_self_kout": -0.0037400884356345128,
+              "beta_ctx_kself": 0.010460666960412042,
+              "beta_ctx_kout": 0.0032975095655104246
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.01170597618658933,
+              "beta_self_kout": -0.0037400884356345128,
+              "beta_ctx_kself": 0.010460666960412042,
+              "beta_ctx_kout": 0.0032975095655104246
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.005882112375670516,
+              "beta_self_kout": -0.0026817465983489655,
+              "beta_ctx_kself": 0.0048124607994859524,
+              "beta_ctx_kout": 0.006620471421688779
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.005882112375670516,
+              "beta_self_kout": -0.0026817465983489655,
+              "beta_ctx_kself": 0.0048124607994859524,
+              "beta_ctx_kout": 0.006620471421688779
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.013231930703213293,
+              "beta_self_kout": 0.0035041670256845477,
+              "beta_ctx_kself": 0.009941323403729562,
+              "beta_ctx_kout": -0.0006431605916098483
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.013231930703213293,
+              "beta_self_kout": 0.0035041670256845477,
+              "beta_ctx_kself": 0.009941323403729562,
+              "beta_ctx_kout": -0.0006431605916098483
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.0057761285417219,
+              "beta_self_kout": 0.0072774754868006886,
+              "beta_ctx_kself": 0.008850814512312677,
+              "beta_ctx_kout": -0.002229696999709803
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.0057761285417219,
+              "beta_self_kout": 0.0072774754868006886,
+              "beta_ctx_kself": 0.008850814512312677,
+              "beta_ctx_kout": -0.002229696999709803
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.007665753038568835,
+              "beta_self_kout": -0.0017633832740744774,
+              "beta_ctx_kself": 0.008776770331146195,
+              "beta_ctx_kout": 0.0008022098825380641
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.007665753038568835,
+              "beta_self_kout": -0.0017633832740744774,
+              "beta_ctx_kself": 0.008776770331146195,
+              "beta_ctx_kout": 0.0008022098825380641
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.0027163507859746107,
+              "beta_self_kout": 0.003206539511435457,
+              "beta_ctx_kself": 0.0036361886303027525,
+              "beta_ctx_kout": 0.002668322897271347
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.0027163507859746107,
+              "beta_self_kout": 0.003206539511435457,
+              "beta_ctx_kself": 0.0036361886303027525,
+              "beta_ctx_kout": 0.002668322897271347
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.0044283519278301466,
+              "beta_self_kout": 0.0028897673992770998,
+              "beta_ctx_kself": 0.008530836694409216,
+              "beta_ctx_kout": -0.0013026805622841295
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.0044283519278301466,
+              "beta_self_kout": 0.0028897673992770998,
+              "beta_ctx_kself": 0.008530836694409216,
+              "beta_ctx_kout": -0.0013026805622841295
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.01027826894616143,
+              "beta_self_kout": 0.00036698708864764276,
+              "beta_ctx_kself": 0.009222543893614456,
+              "beta_ctx_kout": -0.002469850343770142
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.01027826894616143,
+              "beta_self_kout": 0.00036698708864764276,
+              "beta_ctx_kself": 0.009222543893614456,
+              "beta_ctx_kout": -0.002469850343770142
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.01031277584502539,
+              "beta_self_kout": -0.0025190283010138002,
+              "beta_ctx_kself": 0.007996537022867529,
+              "beta_ctx_kout": 0.0018444369172316607
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.01031277584502539,
+              "beta_self_kout": -0.0025190283010138002,
+              "beta_ctx_kself": 0.007996537022867529,
+              "beta_ctx_kout": 0.0018444369172316607
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.005507301667027352,
+              "beta_self_kout": -0.000623778957538937,
+              "beta_ctx_kself": 0.008652292316136893,
+              "beta_ctx_kout": -0.000770921863232446
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.005507301667027352,
+              "beta_self_kout": -0.000623778957538937,
+              "beta_ctx_kself": 0.008652292316136893,
+              "beta_ctx_kout": -0.000770921863232446
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.010477956655743201,
+              "beta_self_kout": 0.0003725016655845609,
+              "beta_ctx_kself": 0.006025628764023478,
+              "beta_ctx_kout": -0.0011881634745628288
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.010477956655743201,
+              "beta_self_kout": 0.0003725016655845609,
+              "beta_ctx_kself": 0.006025628764023478,
+              "beta_ctx_kout": -0.0011881634745628288
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.006798298835906128,
+              "beta_self_kout": -0.00012190398472013534,
+              "beta_ctx_kself": 0.010197330987083862,
+              "beta_ctx_kout": 0.002097408772853426
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.006798298835906128,
+              "beta_self_kout": -0.00012190398472013534,
+              "beta_ctx_kself": 0.010197330987083862,
+              "beta_ctx_kout": 0.002097408772853426
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.0009234407080240984,
+              "beta_self_kout": 0.003806835640047518,
+              "beta_ctx_kself": -0.003105770029813603,
+              "beta_ctx_kout": 0.003969944005832583
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.0009234407080240984,
+              "beta_self_kout": 0.003806835640047518,
+              "beta_ctx_kself": -0.003105770029813603,
+              "beta_ctx_kout": 0.003969944005832583
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.0319713095286963,
+              "beta_self_kout": 0.004444775063270512,
+              "beta_ctx_kself": 0.0014727096882339724,
+              "beta_ctx_kout": -0.003922582733608824
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.0319713095286963,
+              "beta_self_kout": 0.004444775063270512,
+              "beta_ctx_kself": 0.0014727096882339724,
+              "beta_ctx_kout": -0.003922582733608824
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.01110806079160016,
+              "beta_self_kout": 0.0013164700543026077,
+              "beta_ctx_kself": 0.007442311607722094,
+              "beta_ctx_kout": 0.00048675807441575286
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.01110806079160016,
+              "beta_self_kout": 0.0013164700543026077,
+              "beta_ctx_kself": 0.007442311607722094,
+              "beta_ctx_kout": 0.00048675807441575286
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.009539748392442215,
+              "beta_self_kout": -0.004176519210180883,
+              "beta_ctx_kself": 0.008499803241878828,
+              "beta_ctx_kout": 0.005759151653351351
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.009539748392442215,
+              "beta_self_kout": -0.004176519210180883,
+              "beta_ctx_kself": 0.008499803241878828,
+              "beta_ctx_kout": 0.005759151653351351
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.003755156229790893,
+              "beta_self_kout": 0.0019501181150088746,
+              "beta_ctx_kself": 0.013972993724358907,
+              "beta_ctx_kout": 0.00013016793172712914
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.003755156229790893,
+              "beta_self_kout": 0.0019501181150088746,
+              "beta_ctx_kself": 0.013972993724358907,
+              "beta_ctx_kout": 0.00013016793172712914
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.00801040631869,
+              "beta_self_kout": -0.0022019856984611765,
+              "beta_ctx_kself": 0.011714967547996986,
+              "beta_ctx_kout": 0.001732570642331649
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.00801040631869,
+              "beta_self_kout": -0.0022019856984611765,
+              "beta_ctx_kself": 0.011714967547996986,
+              "beta_ctx_kout": 0.001732570642331649
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.010957602234402845,
+              "beta_self_kout": -0.0008962683083439177,
+              "beta_ctx_kself": 0.005097459613833944,
+              "beta_ctx_kout": 0.0017515117619266536
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.010957602234402845,
+              "beta_self_kout": -0.0008962683083439177,
+              "beta_ctx_kself": 0.005097459613833944,
+              "beta_ctx_kout": 0.0017515117619266536
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.007862947005160742,
+              "beta_self_kout": -0.001082150377443049,
+              "beta_ctx_kself": 0.009546250621370312,
+              "beta_ctx_kout": -0.00025927683205582226
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.007862947005160742,
+              "beta_self_kout": -0.001082150377443049,
+              "beta_ctx_kself": 0.009546250621370312,
+              "beta_ctx_kout": -0.00025927683205582226
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.008775737691248807,
+              "beta_self_kout": 0.0004531103767278489,
+              "beta_ctx_kself": 0.006943386867068938,
+              "beta_ctx_kout": -0.0013298015657068774
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.008775737691248807,
+              "beta_self_kout": 0.0004531103767278489,
+              "beta_ctx_kself": 0.006943386867068938,
+              "beta_ctx_kout": -0.0013298015657068774
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.010591132545169375,
+              "beta_self_kout": -0.0006673760518194362,
+              "beta_ctx_kself": 0.007608810717358575,
+              "beta_ctx_kout": -0.0005265164694767721
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.010591132545169375,
+              "beta_self_kout": -0.0006673760518194362,
+              "beta_ctx_kself": 0.007608810717358575,
+              "beta_ctx_kout": -0.0005265164694767721
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.005828142534235298,
+              "beta_self_kout": -0.0012980776905019988,
+              "beta_ctx_kself": 0.00683693538466683,
+              "beta_ctx_kout": 4.7899504093808244e-05
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.005828142534235298,
+              "beta_self_kout": -0.0012980776905019988,
+              "beta_ctx_kself": 0.00683693538466683,
+              "beta_ctx_kout": 4.7899504093808244e-05
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.01194041737314154,
+              "beta_self_kout": -0.001143785799143092,
+              "beta_ctx_kself": 0.010925079625802771,
+              "beta_ctx_kout": 0.0019083758004875629
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.01194041737314154,
+              "beta_self_kout": -0.001143785799143092,
+              "beta_ctx_kself": 0.010925079625802771,
+              "beta_ctx_kout": 0.0019083758004875629
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.00966171240855044,
+              "beta_self_kout": -0.0009488474510505195,
+              "beta_ctx_kself": 0.00460045486313825,
+              "beta_ctx_kout": 0.0025197567615182076
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.00966171240855044,
+              "beta_self_kout": -0.0009488474510505195,
+              "beta_ctx_kself": 0.00460045486313825,
+              "beta_ctx_kout": 0.0025197567615182076
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.004561869289629788,
+              "beta_self_kout": -0.0003597715673859553,
+              "beta_ctx_kself": 0.005845397517525455,
+              "beta_ctx_kout": -0.0027693857328163884
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.004561869289629788,
+              "beta_self_kout": -0.0003597715673859553,
+              "beta_ctx_kself": 0.005845397517525455,
+              "beta_ctx_kout": -0.0027693857328163884
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.010913808586832392,
+              "beta_self_kout": 0.002025735093342937,
+              "beta_ctx_kself": 0.0069387058488032775,
+              "beta_ctx_kout": -0.0021244063456620707
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.010913808586832392,
+              "beta_self_kout": 0.002025735093342937,
+              "beta_ctx_kself": 0.0069387058488032775,
+              "beta_ctx_kout": -0.0021244063456620707
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.0058702772670015495,
+              "beta_self_kout": 0.0018592309624444563,
+              "beta_ctx_kself": 0.0024333580396278193,
+              "beta_ctx_kout": 0.002132827288055616
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.0058702772670015495,
+              "beta_self_kout": 0.0018592309624444563,
+              "beta_ctx_kself": 0.0024333580396278193,
+              "beta_ctx_kout": 0.002132827288055616
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.010583158288847906,
+              "beta_self_kout": -0.0038334171910458063,
+              "beta_ctx_kself": 0.008247107827176539,
+              "beta_ctx_kout": -0.0003080797476026076
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.010583158288847906,
+              "beta_self_kout": -0.0038334171910458063,
+              "beta_ctx_kself": 0.008247107827176539,
+              "beta_ctx_kout": -0.0003080797476026076
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.016049631114139706,
+              "beta_self_kout": 0.003473778836882146,
+              "beta_ctx_kself": 0.009007444338460145,
+              "beta_ctx_kout": 0.0009477342466934994
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.016049631114139706,
+              "beta_self_kout": 0.003473778836882146,
+              "beta_ctx_kself": 0.009007444338460145,
+              "beta_ctx_kout": 0.0009477342466934994
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          }
+        ],
+        "M2": [
+          {
+            "as_registered": {
+              "beta_self_kself": 0.005648635149009902,
+              "beta_self_kout": 0.0005524022127834739,
+              "beta_ctx_kself": 0.00827993260634414,
+              "beta_ctx_kout": -0.0010684170120558892
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.005648635149009902,
+              "beta_self_kout": 0.0005524022127834739,
+              "beta_ctx_kself": 0.00827993260634414,
+              "beta_ctx_kout": -0.0010684170120558892
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.00731312615306104,
+              "beta_self_kout": -0.001628015982155257,
+              "beta_ctx_kself": 0.009606623353077094,
+              "beta_ctx_kout": 0.0022800819288288157
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.00731312615306104,
+              "beta_self_kout": -0.001628015982155257,
+              "beta_ctx_kself": 0.009606623353077094,
+              "beta_ctx_kout": 0.0022800819288288157
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.0013186406914156101,
+              "beta_self_kout": -0.0015923416574632034,
+              "beta_ctx_kself": 0.010470333224059254,
+              "beta_ctx_kout": 0.00034166242900049513
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.0013186406914156101,
+              "beta_self_kout": -0.0015923416574632034,
+              "beta_ctx_kself": 0.010470333224059254,
+              "beta_ctx_kout": 0.00034166242900049513
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.007603938940086881,
+              "beta_self_kout": 5.1467153754511585e-05,
+              "beta_ctx_kself": 0.007916107150506273,
+              "beta_ctx_kout": 0.0006232267929749751
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.007603938940086881,
+              "beta_self_kout": 5.1467153754511585e-05,
+              "beta_ctx_kself": 0.007916107150506273,
+              "beta_ctx_kout": 0.0006232267929749751
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.015835890564753194,
+              "beta_self_kout": -0.0007355773334826842,
+              "beta_ctx_kself": 0.005860091488270097,
+              "beta_ctx_kout": 0.0025591213633498226
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.015835890564753194,
+              "beta_self_kout": -0.0007355773334826842,
+              "beta_ctx_kself": 0.005860091488270097,
+              "beta_ctx_kout": 0.0025591213633498226
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.006034257632949206,
+              "beta_self_kout": 0.002071904069479961,
+              "beta_ctx_kself": 0.003874283686077326,
+              "beta_ctx_kout": -0.0017876825848174563
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.006034257632949206,
+              "beta_self_kout": 0.002071904069479961,
+              "beta_ctx_kself": 0.003874283686077326,
+              "beta_ctx_kout": -0.0017876825848174563
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.014403132799666079,
+              "beta_self_kout": 0.006834544005360329,
+              "beta_ctx_kself": 0.009794099439030517,
+              "beta_ctx_kout": 0.0007369041197265916
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.014403132799666079,
+              "beta_self_kout": 0.006834544005360329,
+              "beta_ctx_kself": 0.009794099439030517,
+              "beta_ctx_kout": 0.0007369041197265916
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.006763931043364101,
+              "beta_self_kout": 0.0015033988831795343,
+              "beta_ctx_kself": 0.004533630212908094,
+              "beta_ctx_kout": -0.0007390419576721863
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.006763931043364101,
+              "beta_self_kout": 0.0015033988831795343,
+              "beta_ctx_kself": 0.004533630212908094,
+              "beta_ctx_kout": -0.0007390419576721863
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.01083184463733403,
+              "beta_self_kout": 0.0019345876425731386,
+              "beta_ctx_kself": 0.008145753489676208,
+              "beta_ctx_kout": 0.000580188475742957
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.01083184463733403,
+              "beta_self_kout": 0.0019345876425731386,
+              "beta_ctx_kself": 0.008145753489676208,
+              "beta_ctx_kout": 0.000580188475742957
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.012814756658194459,
+              "beta_self_kout": -0.00046402109407941424,
+              "beta_ctx_kself": 0.008470861239177443,
+              "beta_ctx_kout": 0.0030620705132214047
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.012814756658194459,
+              "beta_self_kout": -0.00046402109407941424,
+              "beta_ctx_kself": 0.008470861239177443,
+              "beta_ctx_kout": 0.0030620705132214047
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.008990817197467946,
+              "beta_self_kout": 0.00348754518944677,
+              "beta_ctx_kself": 0.0070113739121929804,
+              "beta_ctx_kout": 0.00038892122442818066
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.008990817197467946,
+              "beta_self_kout": 0.00348754518944677,
+              "beta_ctx_kself": 0.0070113739121929804,
+              "beta_ctx_kout": 0.00038892122442818066
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.005924449621781977,
+              "beta_self_kout": -0.000592167923104674,
+              "beta_ctx_kself": 0.010026640363002137,
+              "beta_ctx_kout": -0.0007398699197489359
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.005924449621781977,
+              "beta_self_kout": -0.000592167923104674,
+              "beta_ctx_kself": 0.010026640363002137,
+              "beta_ctx_kout": -0.0007398699197489359
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.013908942117924112,
+              "beta_self_kout": 0.006371745201507833,
+              "beta_ctx_kself": 0.005640681465781508,
+              "beta_ctx_kout": 0.0015966235270739569
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.013908942117924112,
+              "beta_self_kout": 0.006371745201507833,
+              "beta_ctx_kself": 0.005640681465781508,
+              "beta_ctx_kout": 0.0015966235270739569
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.010808869528554175,
+              "beta_self_kout": 0.0009565806544230937,
+              "beta_ctx_kself": 0.006832315180728187,
+              "beta_ctx_kout": 0.0028274245609525997
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.010808869528554175,
+              "beta_self_kout": 0.0009565806544230937,
+              "beta_ctx_kself": 0.006832315180728187,
+              "beta_ctx_kout": 0.0028274245609525997
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.003061295275386948,
+              "beta_self_kout": 0.001183129345611687,
+              "beta_ctx_kself": 0.01150283530462632,
+              "beta_ctx_kout": -0.003199731417531189
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.003061295275386948,
+              "beta_self_kout": 0.001183129345611687,
+              "beta_ctx_kself": 0.01150283530462632,
+              "beta_ctx_kout": -0.003199731417531189
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.009074009478143167,
+              "beta_self_kout": 0.004785790658678665,
+              "beta_ctx_kself": -0.0039474451811065585,
+              "beta_ctx_kout": 0.002504473700585102
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.009074009478143167,
+              "beta_self_kout": 0.004785790658678665,
+              "beta_ctx_kself": -0.0039474451811065585,
+              "beta_ctx_kout": 0.002504473700585102
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": -0.00599791667098676,
+              "beta_self_kout": -0.0007318720796723943,
+              "beta_ctx_kself": 0.007134582840977828,
+              "beta_ctx_kout": 0.0008847387379463108
+            },
+            "isolated_excluded": {
+              "beta_self_kself": -0.00599791667098676,
+              "beta_self_kout": -0.0007318720796723943,
+              "beta_ctx_kself": 0.007134582840977828,
+              "beta_ctx_kout": 0.0008847387379463108
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": -0.0065106175611957945,
+              "beta_self_kout": 0.0031425494382872716,
+              "beta_ctx_kself": 0.00677230309993552,
+              "beta_ctx_kout": 0.002051571826983535
+            },
+            "isolated_excluded": {
+              "beta_self_kself": -0.0065106175611957945,
+              "beta_self_kout": 0.0031425494382872716,
+              "beta_ctx_kself": 0.00677230309993552,
+              "beta_ctx_kout": 0.002051571826983535
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.013659776358039118,
+              "beta_self_kout": -0.004132924100876953,
+              "beta_ctx_kself": 0.006903311693935831,
+              "beta_ctx_kout": 0.0009821393383574193
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.013659776358039118,
+              "beta_self_kout": -0.004132924100876953,
+              "beta_ctx_kself": 0.006903311693935831,
+              "beta_ctx_kout": 0.0009821393383574193
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.008226707965505172,
+              "beta_self_kout": -0.004494873497752002,
+              "beta_ctx_kself": 0.007837339948030098,
+              "beta_ctx_kout": 0.00038569557048026164
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.008226707965505172,
+              "beta_self_kout": -0.004494873497752002,
+              "beta_ctx_kself": 0.007837339948030098,
+              "beta_ctx_kout": 0.00038569557048026164
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.007464988730236795,
+              "beta_self_kout": 0.002665600639156155,
+              "beta_ctx_kself": 0.00038634196932577037,
+              "beta_ctx_kout": 0.002152984234990488
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.007464988730236795,
+              "beta_self_kout": 0.002665600639156155,
+              "beta_ctx_kself": 0.00038634196932577037,
+              "beta_ctx_kout": 0.002152984234990488
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.008670722159747356,
+              "beta_self_kout": 0.0062806660568004245,
+              "beta_ctx_kself": -0.0029808730239938297,
+              "beta_ctx_kout": 0.0048395691138846675
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.008670722159747356,
+              "beta_self_kout": 0.0062806660568004245,
+              "beta_ctx_kself": -0.0029808730239938297,
+              "beta_ctx_kout": 0.0048395691138846675
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.009882058960083208,
+              "beta_self_kout": -0.00011688956403554864,
+              "beta_ctx_kself": 0.005801399137181613,
+              "beta_ctx_kout": 0.0025326458093788834
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.009882058960083208,
+              "beta_self_kout": -0.00011688956403554864,
+              "beta_ctx_kself": 0.005801399137181613,
+              "beta_ctx_kout": 0.0025326458093788834
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.01521318167195453,
+              "beta_self_kout": -0.002997823981613121,
+              "beta_ctx_kself": 0.007991624437580606,
+              "beta_ctx_kout": 0.0020395393318750326
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.01521318167195453,
+              "beta_self_kout": -0.002997823981613121,
+              "beta_ctx_kself": 0.007991624437580606,
+              "beta_ctx_kout": 0.0020395393318750326
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.01304658227743909,
+              "beta_self_kout": 0.000186749137094727,
+              "beta_ctx_kself": 0.010010752408250901,
+              "beta_ctx_kout": 0.002843036701097085
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.01304658227743909,
+              "beta_self_kout": 0.000186749137094727,
+              "beta_ctx_kself": 0.010010752408250901,
+              "beta_ctx_kout": 0.002843036701097085
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.004838150443606087,
+              "beta_self_kout": -0.0026461673600278175,
+              "beta_ctx_kself": 0.006780305599489009,
+              "beta_ctx_kout": 0.001379543889321567
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.004838150443606087,
+              "beta_self_kout": -0.0026461673600278175,
+              "beta_ctx_kself": 0.006780305599489009,
+              "beta_ctx_kout": 0.001379543889321567
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.015734834156831058,
+              "beta_self_kout": 0.00043036458182097874,
+              "beta_ctx_kself": 0.008478992513462584,
+              "beta_ctx_kout": 0.0013810005211567522
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.015734834156831058,
+              "beta_self_kout": 0.00043036458182097874,
+              "beta_ctx_kself": 0.008478992513462584,
+              "beta_ctx_kout": 0.0013810005211567522
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.007822322367192443,
+              "beta_self_kout": 0.00868605207125243,
+              "beta_ctx_kself": 0.007481033834006287,
+              "beta_ctx_kout": -0.0013543359414549105
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.007822322367192443,
+              "beta_self_kout": 0.00868605207125243,
+              "beta_ctx_kself": 0.007481033834006287,
+              "beta_ctx_kout": -0.0013543359414549105
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.002665102772100466,
+              "beta_self_kout": 0.00040471505085540684,
+              "beta_ctx_kself": 0.010319999572061107,
+              "beta_ctx_kout": 0.0002770302484385063
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.002665102772100466,
+              "beta_self_kout": 0.00040471505085540684,
+              "beta_ctx_kself": 0.010319999572061107,
+              "beta_ctx_kout": 0.0002770302484385063
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.005304472482005546,
+              "beta_self_kout": 0.006646867719307878,
+              "beta_ctx_kself": 0.004497343361090098,
+              "beta_ctx_kout": -0.005569347672367964
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.005304472482005546,
+              "beta_self_kout": 0.006646867719307878,
+              "beta_ctx_kself": 0.004497343361090098,
+              "beta_ctx_kout": -0.005569347672367964
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.013247577782517925,
+              "beta_self_kout": 0.0009833546683825738,
+              "beta_ctx_kself": 0.0004780504406760099,
+              "beta_ctx_kout": 0.0005323100176583219
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.013247577782517925,
+              "beta_self_kout": 0.0009833546683825738,
+              "beta_ctx_kself": 0.0004780504406760099,
+              "beta_ctx_kout": 0.0005323100176583219
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.004976251748190587,
+              "beta_self_kout": 0.0020044502972054483,
+              "beta_ctx_kself": 0.004864733557531869,
+              "beta_ctx_kout": 0.0013647710408397691
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.004976251748190587,
+              "beta_self_kout": 0.0020044502972054483,
+              "beta_ctx_kself": 0.004864733557531869,
+              "beta_ctx_kout": 0.0013647710408397691
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.008102542905861881,
+              "beta_self_kout": -0.0006698439508598486,
+              "beta_ctx_kself": 0.007520747426288813,
+              "beta_ctx_kout": 0.00026629709858676514
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.008102542905861881,
+              "beta_self_kout": -0.0006698439508598486,
+              "beta_ctx_kself": 0.007520747426288813,
+              "beta_ctx_kout": 0.00026629709858676514
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.015019633503377728,
+              "beta_self_kout": 0.00022153425620676648,
+              "beta_ctx_kself": 0.0013146101842332087,
+              "beta_ctx_kout": -0.0006849941677980176
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.015019633503377728,
+              "beta_self_kout": 0.00022153425620676648,
+              "beta_ctx_kself": 0.0013146101842332087,
+              "beta_ctx_kout": -0.0006849941677980176
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.013222232895505944,
+              "beta_self_kout": 0.0013617878224033825,
+              "beta_ctx_kself": 0.004581914302977996,
+              "beta_ctx_kout": 0.000695818628014072
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.013222232895505944,
+              "beta_self_kout": 0.0013617878224033825,
+              "beta_ctx_kself": 0.004581914302977996,
+              "beta_ctx_kout": 0.000695818628014072
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.0030461600359018132,
+              "beta_self_kout": 0.0009633643657718603,
+              "beta_ctx_kself": 0.009805651271672496,
+              "beta_ctx_kout": -0.003619154269134049
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.0030461600359018132,
+              "beta_self_kout": 0.0009633643657718603,
+              "beta_ctx_kself": 0.009805651271672496,
+              "beta_ctx_kout": -0.003619154269134049
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.0034543596781518512,
+              "beta_self_kout": -0.0023292313667480856,
+              "beta_ctx_kself": 0.00779813950340678,
+              "beta_ctx_kout": -0.0007559297549218584
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.0034543596781518512,
+              "beta_self_kout": -0.0023292313667480856,
+              "beta_ctx_kself": 0.00779813950340678,
+              "beta_ctx_kout": -0.0007559297549218584
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.009531431201088125,
+              "beta_self_kout": -0.0036981437002967295,
+              "beta_ctx_kself": 0.009891324518065308,
+              "beta_ctx_kout": 0.0005090114387651209
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.009531431201088125,
+              "beta_self_kout": -0.0036981437002967295,
+              "beta_ctx_kself": 0.009891324518065308,
+              "beta_ctx_kout": 0.0005090114387651209
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.00922742781505016,
+              "beta_self_kout": 5.122932578016208e-05,
+              "beta_ctx_kself": 0.0074408079047759545,
+              "beta_ctx_kout": 0.0005255546424506663
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.00922742781505016,
+              "beta_self_kout": 5.122932578016208e-05,
+              "beta_ctx_kself": 0.0074408079047759545,
+              "beta_ctx_kout": 0.0005255546424506663
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.002533188848387319,
+              "beta_self_kout": 0.0016252984115570795,
+              "beta_ctx_kself": 0.0075235921629515385,
+              "beta_ctx_kout": -0.0018925219704623887
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.002533188848387319,
+              "beta_self_kout": 0.0016252984115570795,
+              "beta_ctx_kself": 0.0075235921629515385,
+              "beta_ctx_kout": -0.0018925219704623887
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.006863858299716366,
+              "beta_self_kout": 0.005159764174283384,
+              "beta_ctx_kself": 0.0074730389836369215,
+              "beta_ctx_kout": 0.00048532279182257176
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.006863858299716366,
+              "beta_self_kout": 0.005159764174283384,
+              "beta_ctx_kself": 0.0074730389836369215,
+              "beta_ctx_kout": 0.00048532279182257176
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.0020928858813730527,
+              "beta_self_kout": 0.007107842906504161,
+              "beta_ctx_kself": -0.0009921787236918673,
+              "beta_ctx_kout": 0.0019725655441081118
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.0020928858813730527,
+              "beta_self_kout": 0.007107842906504161,
+              "beta_ctx_kself": -0.0009921787236918673,
+              "beta_ctx_kout": 0.0019725655441081118
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.0032885354829915057,
+              "beta_self_kout": 0.004447408882059316,
+              "beta_ctx_kself": 0.01017141389003728,
+              "beta_ctx_kout": -0.0038221303551745746
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.0032885354829915057,
+              "beta_self_kout": 0.004447408882059316,
+              "beta_ctx_kself": 0.01017141389003728,
+              "beta_ctx_kout": -0.0038221303551745746
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.003932667871797076,
+              "beta_self_kout": -0.0022475161022766075,
+              "beta_ctx_kself": 0.008651524187108139,
+              "beta_ctx_kout": -0.00040090980994523525
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.003932667871797076,
+              "beta_self_kout": -0.0022475161022766075,
+              "beta_ctx_kself": 0.008651524187108139,
+              "beta_ctx_kout": -0.00040090980994523525
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.015265976263612398,
+              "beta_self_kout": -0.0015380429991871108,
+              "beta_ctx_kself": 0.008469911070054716,
+              "beta_ctx_kout": 0.0014911344759930892
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.015265976263612398,
+              "beta_self_kout": -0.0015380429991871108,
+              "beta_ctx_kself": 0.008469911070054716,
+              "beta_ctx_kout": 0.0014911344759930892
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.011103534785690296,
+              "beta_self_kout": 0.0017591278958581646,
+              "beta_ctx_kself": 0.005227714523174179,
+              "beta_ctx_kout": 0.00044246893333860693
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.011103534785690296,
+              "beta_self_kout": 0.0017591278958581646,
+              "beta_ctx_kself": 0.005227714523174179,
+              "beta_ctx_kout": 0.00044246893333860693
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.0031998621406684707,
+              "beta_self_kout": 0.0023917943808650487,
+              "beta_ctx_kself": 0.007260190062899161,
+              "beta_ctx_kout": -0.0037013662144896944
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.0031998621406684707,
+              "beta_self_kout": 0.0023917943808650487,
+              "beta_ctx_kself": 0.007260190062899161,
+              "beta_ctx_kout": -0.0037013662144896944
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.009289221475342665,
+              "beta_self_kout": -0.0036767553529749057,
+              "beta_ctx_kself": 0.007496056370192005,
+              "beta_ctx_kout": 0.0043206368233886724
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.009289221475342665,
+              "beta_self_kout": -0.0036767553529749057,
+              "beta_ctx_kself": 0.007496056370192005,
+              "beta_ctx_kout": 0.0043206368233886724
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.020040264402903782,
+              "beta_self_kout": 0.003047092845406124,
+              "beta_ctx_kself": 0.00873448367512919,
+              "beta_ctx_kout": 0.003075022866513962
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.020040264402903782,
+              "beta_self_kout": 0.003047092845406124,
+              "beta_ctx_kself": 0.00873448367512919,
+              "beta_ctx_kout": 0.003075022866513962
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          },
+          {
+            "as_registered": {
+              "beta_self_kself": 0.009590863386820445,
+              "beta_self_kout": 0.004135579908602383,
+              "beta_ctx_kself": -0.006990799826457768,
+              "beta_ctx_kout": 0.0020885409641908568
+            },
+            "isolated_excluded": {
+              "beta_self_kself": 0.009590863386820445,
+              "beta_self_kout": 0.004135579908602383,
+              "beta_ctx_kself": -0.006990799826457768,
+              "beta_ctx_kout": 0.0020885409641908568
+            },
+            "n_gens": 30,
+            "n_gens_as_registered": 30,
+            "n_gens_isolated_excluded": 30,
+            "n_gens_with_isolated": 0
+          }
+        ]
+      },
+      "per_condition": {
+        "M0": {
+          "isolated_fraction_mean": 0.0022361333333333036,
+          "gens_with_isolated_fraction": 0.19066666666666668,
+          "beta_self_kself_as_registered": 0.006850067442211892,
+          "beta_self_kout_as_registered": 0.0012990894287621853,
+          "beta_ctx_kself_as_registered": 0.01003346795969819,
+          "beta_ctx_kout_as_registered": -0.001029495540799537,
+          "beta_self_kself_isolated_excluded": 0.0060512982746406055,
+          "beta_self_kout_isolated_excluded": 0.0013018026458494357,
+          "beta_ctx_kself_isolated_excluded": 0.012273947402428277,
+          "beta_ctx_kout_isolated_excluded": -0.002191469415391022
+        },
+        "M1": {
+          "isolated_fraction_mean": 2.6666666666666667e-07,
+          "gens_with_isolated_fraction": 0.0,
+          "beta_self_kself_as_registered": 0.009067414967810775,
+          "beta_self_kout_as_registered": 0.0005948616386488112,
+          "beta_ctx_kself_as_registered": 0.007558349117691439,
+          "beta_ctx_kout_as_registered": 0.0008491730694865651,
+          "beta_self_kself_isolated_excluded": 0.009067414967810775,
+          "beta_self_kout_isolated_excluded": 0.0005948616386488112,
+          "beta_ctx_kself_isolated_excluded": 0.007558349117691439,
+          "beta_ctx_kout_isolated_excluded": 0.0008491730694865651
+        },
+        "M2": {
+          "isolated_fraction_mean": 0.0,
+          "gens_with_isolated_fraction": 0.0,
+          "beta_self_kself_as_registered": 0.008164625435683526,
+          "beta_self_kout_as_registered": 0.000959972510097477,
+          "beta_ctx_kself_as_registered": 0.0074770364088216044,
+          "beta_ctx_kout_as_registered": 0.0006017076343589661,
+          "beta_self_kself_isolated_excluded": 0.008164625435683526,
+          "beta_self_kout_isolated_excluded": 0.000959972510097477,
+          "beta_ctx_kself_isolated_excluded": 0.0074770364088216044,
+          "beta_ctx_kout_isolated_excluded": 0.0006017076343589661
+        }
+      },
+      "tests": {
+        "M2 vs M1": {
+          "as_registered": {
+            "U": 1293.0,
+            "p": 0.7695318249152246,
+            "r": -0.034399999999999986,
+            "median_x": 0.0006017076343589661,
+            "median_y": 0.0008491730694865651,
+            "stars": "n.s."
+          },
+          "isolated_excluded": {
+            "U": 1293.0,
+            "p": 0.7695318249152246,
+            "r": -0.034399999999999986,
+            "median_x": 0.0006017076343589661,
+            "median_y": 0.0008491730694865651,
+            "stars": "n.s."
+          }
+        }
+      },
+      "Bb": {
+        "M0": {
+          "as_registered": {
+            "x0": 0.37171183533333246,
+            "y_obs": -0.001029495540799537,
+            "y_hat": -0.002842746590454887,
+            "lo": -0.00492571954199459,
+            "hi": -0.0007597736389151843,
+            "residual": 0.00181325104965535,
+            "in_pi": true
+          },
+          "isolated_excluded": {
+            "x0": 0.37171183533333246,
+            "y_obs": -0.002191469415391022,
+            "y_hat": -0.002842746590454887,
+            "lo": -0.00492571954199459,
+            "hi": -0.0007597736389151843,
+            "residual": 0.0006512771750638649,
+            "in_pi": true
+          }
+        },
+        "M1": {
+          "as_registered": {
+            "x0": 0.09257627749999998,
+            "y_obs": 0.0008491730694865651,
+            "y_hat": -0.0008341485261089499,
+            "lo": -0.0037411681620404015,
+            "hi": 0.0020728711098225022,
+            "residual": 0.001683321595595515,
+            "in_pi": true
+          },
+          "isolated_excluded": {
+            "x0": 0.09257627749999998,
+            "y_obs": 0.0008491730694865651,
+            "y_hat": -0.0008341485261089499,
+            "lo": -0.0037411681620404015,
+            "hi": 0.0020728711098225022,
+            "residual": 0.001683321595595515,
+            "in_pi": true
+          }
+        },
+        "M2": {
+          "as_registered": {
+            "x0": 0.08127118266666658,
+            "y_obs": 0.0006017076343589661,
+            "y_hat": -0.0007527995508091461,
+            "lo": -0.0037038637342546674,
+            "hi": 0.002198264632636375,
+            "residual": 0.0013545071851681122,
+            "in_pi": true
+          },
+          "isolated_excluded": {
+            "x0": 0.08127118266666658,
+            "y_obs": 0.0006017076343589661,
+            "y_hat": -0.0007527995508091461,
+            "lo": -0.0037038637342546674,
+            "hi": 0.002198264632636375,
+            "residual": 0.0013545071851681122,
+            "in_pi": true
+          }
+        }
+      },
+      "ancova_beta_ctx_kout": {
+        "as_registered": {
+          "intercept": {
+            "coef": -0.00018124565658474677,
+            "se": 0.005339187567180209,
+            "ci": [
+              -0.010778055015644905,
+              0.010415563702475412
+            ],
+            "t": -0.03394629881498399,
+            "p": 0.9729897295691111
+          },
+          "is_scent": {
+            "coef": -7.224050642093854e-05,
+            "se": 0.0004702617663000032,
+            "ci": [
+              -0.0010055799374924447,
+              0.0008610989246505676
+            ],
+            "t": -0.15361764786732152,
+            "p": 0.878230358974955
+          },
+          "move_rate": {
+            "coef": 0.001440192853305352,
+            "se": 0.009827359262190577,
+            "ci": [
+              -0.018064394931653568,
+              0.020944780638264274
+            ],
+            "t": 0.14654932366686718,
+            "p": 0.8837919010854065
+          }
+        },
+        "isolated_excluded": {
+          "intercept": {
+            "coef": -0.00018124565658474677,
+            "se": 0.005339187567180209,
+            "ci": [
+              -0.010778055015644905,
+              0.010415563702475412
+            ],
+            "t": -0.03394629881498399,
+            "p": 0.9729897295691111
+          },
+          "is_scent": {
+            "coef": -7.224050642093854e-05,
+            "se": 0.0004702617663000032,
+            "ci": [
+              -0.0010055799374924447,
+              0.0008610989246505676
+            ],
+            "t": -0.15361764786732152,
+            "p": 0.878230358974955
+          },
+          "move_rate": {
+            "coef": 0.001440192853305352,
+            "se": 0.009827359262190577,
+            "ci": [
+              -0.018064394931653568,
+              0.020944780638264274
+            ],
+            "t": 0.14654932366686718,
+            "p": 0.8837919010854065
+          }
+        }
+      },
+      "missing_raw_logs": []
+    },
+    "n1000": {
+      "per_seed": {},
+      "per_condition": {},
+      "tests": {},
+      "Bb": {},
+      "ancova_beta_ctx_kout": {},
+      "missing_raw_logs": [
+        "M0",
+        "M1",
+        "M1-low",
+        "M2",
+        "M2-low"
+      ]
     }
   },
   "n100": {

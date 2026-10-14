@@ -246,6 +246,10 @@ def n100_metrics(d):
 # N=1000). The variant below drops the isolated agents from that
 # generation's regression instead -- exploratory, NOT pre-registered.
 
+CTX_NAMES = ["beta_self_kself", "beta_self_kout", "beta_ctx_kself", "beta_ctx_kout"]
+VARIANTS = ["as_registered", "isolated_excluded"]
+
+
 def _iter_individual_rows(path):
     import gzip
     opener = gzip.open if str(path).endswith(".gz") else open
@@ -265,24 +269,32 @@ def seed_ctx_both_variants(path, min_gen=STEADY_STATE_MIN_GEN):
         g["payoff"].append(float(row["payoff"]))
         g["opp_k_self"].append(float(row["opponent_mean_k_self"]))
         g["opp_k_out"].append(float(row["opponent_mean_k_out"]))
+    keys = ["k_self", "k_out", "payoff", "opp_k_self", "opp_k_out"]
+
+    def degenerate(a):
+        # the registered rule (fewer than 2 distinct values in any of the 5
+        # variables), applied to whichever arrays that variant regresses on
+        return any(len(set(a[k].tolist())) < 2 for k in keys)
+
     as_reg, excl = [], []
     n_gens_with_isolated = 0
-    for gen, g in by_gen.items():
-        arr = {k: np.asarray(v) for k, v in g.items()}
-        if (len(set(g["k_self"])) < 2 or len(set(g["k_out"])) < 2 or len(set(g["payoff"])) < 2
-                or len(set(g["opp_k_self"])) < 2 or len(set(g["opp_k_out"])) < 2):
-            continue
-        as_reg.append(n100.context_lande_arnold(arr["k_self"], arr["k_out"], arr["opp_k_self"],
-                                                arr["opp_k_out"], arr["payoff"]))
+    for gen, g in sorted(by_gen.items()):
+        arr = {k: np.asarray(g[k]) for k in keys}
+        if not degenerate(arr):
+            as_reg.append(n100.context_lande_arnold(arr["k_self"], arr["k_out"], arr["opp_k_self"],
+                                                    arr["opp_k_out"], arr["payoff"]))
         keep = ~(np.isnan(arr["opp_k_out"]) | np.isnan(arr["opp_k_self"]))
         if not keep.all():
             n_gens_with_isolated += 1
-        excl.append(n100.context_lande_arnold(arr["k_self"][keep], arr["k_out"][keep], arr["opp_k_self"][keep],
-                                              arr["opp_k_out"][keep], arr["payoff"][keep]))
-    names = ["beta_self_kself", "beta_self_kout", "beta_ctx_kself", "beta_ctx_kout"]
-    med = lambda rows: {n: float(np.median([r[i] for r in rows])) if rows else np.nan for i, n in enumerate(names)}
+        kept = {k: v[keep] for k, v in arr.items()}
+        if not degenerate(kept):
+            excl.append(n100.context_lande_arnold(kept["k_self"], kept["k_out"], kept["opp_k_self"],
+                                                  kept["opp_k_out"], kept["payoff"]))
+    med = lambda rows: {n: float(np.median([r[i] for r in rows])) if rows else np.nan
+                        for i, n in enumerate(CTX_NAMES)}
     return dict(as_registered=med(as_reg), isolated_excluded=med(excl),
-                n_gens=len(as_reg), n_gens_with_isolated=n_gens_with_isolated)
+                n_gens=len(by_gen), n_gens_as_registered=len(as_reg), n_gens_isolated_excluded=len(excl),
+                n_gens_with_isolated=n_gens_with_isolated)
 
 
 def run_isolated_sensitivity(conditions, seeds, filename):
@@ -298,26 +310,41 @@ def run_isolated_sensitivity(conditions, seeds, filename):
     return out
 
 
-def summarize_sensitivity(sens, pairs):
-    res = {}
-    for label, seeds in sens.items():
-        if seeds is None:
-            res[label] = None
-            continue
-        res[label] = dict(
+def deviation_analysis(sens, op_by_cond, pairs, bb_conditions, ancova_pair):
+    """Analyses fixed by docs/DEVIATION_isolated_agents.md, both variants side
+    by side. sens: {label: [per-seed seed_ctx_both_variants] or None};
+    op_by_cond: {label: [per-seed seed_mean_operational]} (same seed order)."""
+    out = dict(per_seed={}, per_condition={}, tests={}, Bb={}, ancova_beta_ctx_kout={})
+    avail = {l: v for l, v in sens.items() if v is not None}
+    out["missing_raw_logs"] = sorted(l for l, v in sens.items() if v is None)
+    for label, seeds in avail.items():
+        out["per_seed"][label] = seeds
+        op = op_by_cond[label]
+        out["per_condition"][label] = dict(
+            isolated_fraction_mean=float(np.nanmean([o["isolated_fraction"] for o in op])),
             gens_with_isolated_fraction=float(sum(s["n_gens_with_isolated"] for s in seeds)
                                               / sum(s["n_gens"] for s in seeds)),
-            beta_ctx_kout_as_registered=float(np.nanmedian([s["as_registered"]["beta_ctx_kout"] for s in seeds])),
-            beta_ctx_kout_isolated_excluded=float(np.nanmedian([s["isolated_excluded"]["beta_ctx_kout"] for s in seeds])),
-            beta_ctx_kself_isolated_excluded=float(np.nanmedian([s["isolated_excluded"]["beta_ctx_kself"] for s in seeds])),
+            **{f"{n}_{v}": float(np.nanmedian([s[v][n] for s in seeds])) for v in VARIANTS for n in CTX_NAMES},
         )
-    tests = {}
     for a, b in pairs:
-        if sens.get(a) is None or sens.get(b) is None:
-            continue
-        tests[f"{a} vs {b}"] = mw([s["isolated_excluded"]["beta_ctx_kout"] for s in sens[a]],
-                                  [s["isolated_excluded"]["beta_ctx_kout"] for s in sens[b]])
-    return dict(per_condition=res, tests=tests)
+        if a in avail and b in avail:
+            out["tests"][f"{a} vs {b}"] = {
+                v: mw([s[v]["beta_ctx_kout"] for s in avail[a]], [s[v]["beta_ctx_kout"] for s in avail[b]])
+                for v in VARIANTS}
+    for label in bb_conditions:
+        if label in avail:
+            x0 = float(np.nanmedian([o["k_out_assortativity"] for o in op_by_cond[label]]))
+            out["Bb"][label] = {v: pi_check(x0, np.nanmedian([s[v]["beta_ctx_kout"] for s in avail[label]]))
+                                for v in VARIANTS}
+    m1, m2 = ancova_pair
+    if m1 in avail and m2 in avail:
+        mv = np.array([o["move_rate"] for o in op_by_cond[m1]] + [o["move_rate"] for o in op_by_cond[m2]])
+        isc = np.concatenate([np.zeros(len(avail[m1])), np.ones(len(avail[m2]))])
+        for v in VARIANTS:
+            y = np.array([s[v]["beta_ctx_kout"] for s in avail[m1]] + [s[v]["beta_ctx_kout"] for s in avail[m2]])
+            out["ancova_beta_ctx_kout"][v] = ols(y, np.column_stack([np.ones_like(y), isc, mv]),
+                                                 ["intercept", "is_scent", "move_rate"])
+    return out
 
 
 # ---------------------------------------------------------------- figures
@@ -567,21 +594,36 @@ def main():
         ancova[name] = ols(y, np.column_stack([np.ones_like(y), isc, mv]), ["intercept", "is_scent", "move_rate"])
         print(f"  ANCOVA {name}:", {k: (round(v['coef'], 6), [round(c, 6) for c in v['ci']], f"{v['p']:.3g}")
                                     for k, v in ancova[name].items()})
-    print("\n  isolated-agent sensitivity (context regression without agents that had no duel):")
-    sens100 = summarize_sensitivity(
-        run_isolated_sensitivity(n100.CONDITIONS, n100.SEEDS, "seed_{seed}_individual_log.csv"), [("M2", "M1")])
-    print("  N=100:", json.dumps(sens100, indent=1))
-    sens1000 = summarize_sensitivity(
-        run_isolated_sensitivity(CONDITIONS, SEEDS, "seed_{seed}_individual_log.csv.gz"),
-        [("M2", "M1"), ("M2-low", "M1-low")])
-    missing = [l for l, v in sens1000["per_condition"].items() if v is None]
-    if missing:
-        print(f"  N=1000: raw individual_log.csv.gz not in this checkout for {missing} "
-              f"(local-only on the run machine) -- rerun this script there to fill this in.")
-    print("  N=1000:", json.dumps(sens1000, indent=1))
-    res["exploratory"] = dict(isolated_sensitivity=dict(n100=sens100, n1000=sens1000), prediction_all5=allpi, residual_mean=float(res_vals.mean()),
+    res["exploratory"] = dict(prediction_all5=allpi, residual_mean=float(res_vals.mean()),
                               residual_abs_mean=float(np.abs(res_vals).mean()),
                               ancova=ancova)
+
+    # ---------------- docs/DEVIATION_isolated_agents.md: both variants side by side
+    print("\n=== Isolated-agent deviation (docs/DEVIATION_isolated_agents.md) ===")
+    dev100 = deviation_analysis(
+        run_isolated_sensitivity(n100.CONDITIONS, n100.SEEDS, "seed_{seed}_individual_log.csv"),
+        {l: n100d[l]["op"] for l, _ in n100.CONDITIONS},
+        pairs=[("M2", "M1")], bb_conditions=["M0", "M1", "M2"], ancova_pair=("M1", "M2"))
+    dev1000 = deviation_analysis(
+        run_isolated_sensitivity(CONDITIONS, SEEDS, "seed_{seed}_individual_log.csv.gz"),
+        {l: data[l]["op"] for l, _ in CONDITIONS},
+        pairs=[("M2", "M1"), ("M2-low", "M1-low")], bb_conditions=[l for l, _ in CONDITIONS],
+        ancova_pair=("M1", "M2"))
+    for name, dev in [("N=100", dev100), ("N=1000", dev1000)]:
+        if dev["missing_raw_logs"]:
+            print(f"  {name}: raw individual logs not in this checkout for {dev['missing_raw_logs']} "
+                  f"(N=1000's are local-only on the run machine) -- rerun this script there.")
+        print(f"  {name} per condition:", json.dumps(dev["per_condition"], indent=1))
+        for t, r in dev["tests"].items():
+            for v in VARIANTS:
+                print(f"  {name} [{v}] " + fmt_mw(t, r[v]))
+        for l, r in dev["Bb"].items():
+            for v in VARIANTS:
+                print(f"  {name} B(b) {l} [{v}]: y={r[v]['y_obs']:+.6f} in_pi={r[v]['in_pi']}")
+        for v, fit in dev["ancova_beta_ctx_kout"].items():
+            print(f"  {name} ANCOVA beta_ctx(K_out) group 1 [{v}]:",
+                  {k: (round(x["coef"], 6), [round(c, 6) for c in x["ci"]], f"{x['p']:.3g}") for k, x in fit.items()})
+    res["deviation_isolated"] = dict(n100=dev100, n1000=dev1000)
 
     # N=100 comparison
     n100_clean = {k: v for k, v in n100m.items()}
