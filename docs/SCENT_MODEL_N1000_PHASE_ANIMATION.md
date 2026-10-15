@@ -15,6 +15,11 @@ M2(scent, tau=0.033333)の3条件を、本番と同じパラメータ・同じ s
 記録は乱数の消費を変えない(オプトイン・副作用のみ)ので、この再実行は
 本番そのものと同じ軌跡になるはずであり、その一致を機械的に検証できる。
 
+この2種類の記録から、3つの成果物を作る: (1)フェーズ単位の3パネル動画
+(3節、既にデザイン確認済み)、(2)追加B: Heatbugs風4タイプ動画・毎世代版
+(5節、記録完了後にMacで描画)、(3)追加C: 学会用の集計図(6節、**本番データ
+だけで作れるので、このクラウド環境で既に作成済み**)。
+
 実装: `evopersonality_abm/scent_spatial.py`(`phase_callback`が4つ目に
 `payoff_so_far`を渡すよう拡張)、`scripts/run_scent_spatial_sweep_n1000.py`
 (`--out-root`で出力先を本番ツリーの外に強制できるよう拡張。本番ルートと
@@ -208,7 +213,86 @@ N=1000・41×41グリッドはN=100・13×13版より密度は同じだが点の
 描画(`animate_scent_n1000_phase_recording.py`)は`phase_recording.pkl.gz`
 だけを読むので、Macで記録→Macで描画→動画ファイル(MP4/GIF、1本あたり
 数MB)だけ送ってもらう形で完結するはず。`seed_0_individual_log.csv.gz`
-(毎世代記録)はサイズが大きいので、再現性の検証(2節)以外の用途、
-たとえばこのクラウド側で別の描画を試したい場合などに必要になったら、
+(毎世代記録)はサイズが大きいので、再現性の検証(2節)・5節(追加B)以外の
+用途、たとえばこのクラウド側で別の描画を試したい場合などに必要になったら、
 ファイルサイズを見てやり取り方法(圧縮して一部だけ送る、特定の条件・
-世代範囲だけ抜き出すなど)を相談する。
+世代範囲だけ抜き出すなど)を相談する。5節(追加B)の動画もMac上で
+`seed_0_individual_log.csv.gz`から直接描画できるので、追加の転送は不要。
+
+---
+
+## 5. 追加B: Heatbugs風4タイプ動画(毎世代版)
+
+1節の記録run(`--individual-log-interval 1`込み)が完了すれば、追加の
+記録は不要。`seed_0_individual_log.csv.gz`から直接描画する。
+
+### 固定の型分けしきい値
+
+型の境目(K_self・K_out それぞれの中央値)は、本番の**全30 seed × 3条件
+(M0・M1・M2)、gen≥2000をプールして**一度だけ計算し固定した(試作で使った
+seed 0 だけの値 0.7835265 / 0.4566165 は置き換えた)。このクラウド環境で
+既に計算済み:
+
+    K_self 中央値(threshold_kself) = 0.7770470
+    K_out  中央値(threshold_kout)  = 0.5025085
+
+(`scripts/compute_scent_n1000_type_thresholds.py`で計算、
+`scripts/output/scent_spatial_sweep_n1000/analysis/type_thresholds.json`
+に保存済み。本番データはこのクラウド環境に既にあるコミット済みの生ログを
+使っているので、Mac側で再計算する必要はない。)
+
+### 描画コマンド
+
+3条件 × 2速度版、計6本。`--speed full`が5000世代@60fps(約85秒)、
+`--speed fast`が2世代おき@60fps(約40秒)。
+
+    python3 scripts/animate_scent_n1000_heatbugs.py --movement none --recording-root scripts/output/scent_spatial_sweep_n1000_phase_recording --speed full
+    python3 scripts/animate_scent_n1000_heatbugs.py --movement none --recording-root scripts/output/scent_spatial_sweep_n1000_phase_recording --speed fast
+    python3 scripts/animate_scent_n1000_heatbugs.py --movement random --recording-root scripts/output/scent_spatial_sweep_n1000_phase_recording --speed full
+    python3 scripts/animate_scent_n1000_heatbugs.py --movement random --recording-root scripts/output/scent_spatial_sweep_n1000_phase_recording --speed fast
+    python3 scripts/animate_scent_n1000_heatbugs.py --movement scent --recording-root scripts/output/scent_spatial_sweep_n1000_phase_recording --speed full
+    python3 scripts/animate_scent_n1000_heatbugs.py --movement scent --recording-root scripts/output/scent_spatial_sweep_n1000_phase_recording --speed fast
+
+出力: `scripts/output/figures/scent_n1000_heatbugs_{none,random,scent}_{full,fast}.mp4`。
+
+デザイン(添付の`heatbugs_style_reference.py`と同じ見た目。このクラウド環境で
+80世代・population=1000の試し描画で確認済み):
+- 左: 黒背景、空きマスは匂いの場(hotカラーマップ、範囲は`--vmin`/`--vmax`で
+  固定、既定2.55〜3.15)、エージェントは4タイプの色の正方形(白=高K_self/高K_out、
+  青=高K_self/低K_out、緑=低K_self/高K_out、ピンク=低K_self/低K_out)。
+- 右上: タイプ割合(%)の推移、世代とともに線が伸びる。
+- 右下: タイプごとの「このタイプの平均得点 − 全体平均得点」の累積和、
+  世代とともに線が伸びる。
+- 画面下に「中央値で無理やり分けた型であり、集団は連続した一つの雲」の注記。
+- 英語表記、16:9、MP4(フルHD、dpi100)。
+
+所要時間: このクラウド環境で80世代・60fps相当の設定で約30秒
+(描画自体はCPU律速で世代数にほぼ比例)。5000世代版(`--speed full`)は
+この約60倍の計算量になるので、1本あたり数分〜十数分程度を見込む
+(3条件×2速度=6本で合計数十分程度)。実際の時間はMacの性能次第なので、
+1節のタイミング計測ついでに、80〜100世代程度の短い`--individual-log-interval 1`
+記録で先にこのスクリプトを試すことを推奨する。
+
+---
+
+## 6. 追加C: 学会用の集計図(本番データのみ、作成済み)
+
+再実行を待たずに、**既にこのクラウド環境で作成済み**。本番の全30 seed ×
+各条件(M0・M1・M2)、gen≥2000(100世代おき、30時点/seed)を使い、
+5節と同じ固定しきい値(K_self≥0.7770470、K_out≥0.5025085)で型分けし、
+seed間ブートストラップ(2000回)の平均+95%帯を3パネル(M0/M1/M2)で描いた:
+
+- `docs/figures/scent_n1000/type_share_summary_{print,slide}.png`
+  (タイプ割合の推移)
+- `docs/figures/scent_n1000/type_cumulative_deviation_summary_{print,slide}.png`
+  (タイプごとの累積得点優位)
+
+`_print`が300dpi、`_slide`が16:9・大きめフォント版。探索的・記述的な図
+として扱い、検定は付けていない。計算は
+`scripts/compute_scent_n1000_type_thresholds.py` →
+`scripts/plot_scent_n1000_type_summary.py`。
+
+注意: 本番の個体ログは100世代おきのスナップショットしかないため、この
+図の累積和は100世代ごとの30時点についての累積和であり、毎世代の累積和
+ではない。毎世代版が必要なら、5節(追加B)と同じ`seed_0_individual_log.csv.gz`
+(毎世代記録)から作り直すことになる(現時点では未実装・未作成)。
