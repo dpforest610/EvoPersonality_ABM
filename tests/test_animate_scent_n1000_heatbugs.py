@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
@@ -32,32 +33,85 @@ def test_tcode_boundary_is_inclusive_high():
     assert mod.tcode(a, ts=0.5, to=0.5)[0] == 0  # >= counts as "high"
 
 
-def test_field_mean_of_four_orthogonal_occupied_neighbors():
-    # agent at (2,2) with payoff 2.0, agent at (3,2) [east neighbor] with payoff 4.0;
-    # cell (2,2) itself should be NaN (occupied); a cell neighboring only one of them
-    # sees that one payoff value
-    a = np.array([
-        [2, 2, 0.5, 0.5, 2.0],
-        [3, 2, 0.5, 0.5, 4.0],
-    ])
-    f = mod.field(a, width=10, height=10)
-    assert f[2, 2] != f[2, 2]  # NaN: occupied cell
-    # cell (2,1) [x=2,y=1] is an orthogonal neighbor of (2,2) only
-    assert f[1, 2] == 2.0
-    # cell (3,1) [x=3,y=1] is an orthogonal neighbor of (3,2) only
-    assert f[1, 3] == 4.0
-    # cell (2,3) [x=2,y=3], north of (2,2): also neighbors only (2,2)
-    assert f[3, 2] == 2.0
+def test_field_uses_8_cell_moore_neighborhood_not_4_cell():
+    # the model's own scent field (_mean_neighbor_payoff, called with
+    # offsets=moore_offsets(radius=1) from _run_generation) uses all 8
+    # surrounding cells, not just the 4 orthogonal ones -- the bug in the
+    # first prototype (heatbugs_style_reference.py). A diagonal neighbor
+    # must be picked up.
+    a = np.array([[5, 5, 0.5, 0.5, 7.0]])
+    f = mod.field(a, width=12, height=12)
+    assert f[5, 5] != f[5, 5]  # NaN: occupied cell itself
+    assert f[6, 6] == 7.0      # diagonal neighbor (Chebyshev distance 1)
+    assert f[6, 5] == 7.0      # orthogonal neighbor, still included
+    assert f[7, 7] != f[7, 7]  # Chebyshev distance 2 -> outside radius 1, NaN
 
 
-def test_field_averages_multiple_occupied_neighbors():
+def test_field_averages_multiple_occupied_moore_neighbors():
     a = np.array([
         [1, 1, 0.5, 0.5, 2.0],
         [3, 1, 0.5, 0.5, 6.0],
     ])
     f = mod.field(a, width=10, height=10)
-    # cell (2,1) is an orthogonal neighbor of both (1,1) and (3,1)
+    # cell (2,1) is a Moore neighbor of both (1,1) and (3,1)
     assert f[1, 2] == 4.0
+
+
+def test_field_isolated_agent_only_affects_its_own_moore_neighborhood():
+    a = np.array([
+        [1, 1, 0.5, 0.5, 2.0],
+        [8, 8, 0.5, 0.5, 4.0],
+    ])
+    f = mod.field(a, width=12, height=12)
+    assert f[2, 2] == 2.0       # Moore neighbor of (1,1) only
+    assert f[7, 7] == 4.0       # Moore neighbor of (8,8) only
+    assert f[5, 5] != f[5, 5]   # far from both -> NaN
+
+
+def test_field_matches_model_mean_neighbor_payoff():
+    """field() must reproduce the model's own scent score exactly: the
+    same payoff_so_far values, through the same moore_offsets(radius=1)
+    neighborhood, computed by the same function _run_generation actually
+    scores scent candidates with
+    (evopersonality_abm.spatial._mean_neighbor_payoff)."""
+    from evopersonality_abm.spatial import _mean_neighbor_payoff
+
+    rng = np.random.default_rng(0)
+    width = height = 12
+    n_agents = 25
+    positions = []
+    seen = set()
+    while len(positions) < n_agents:
+        pos = (int(rng.integers(0, width)), int(rng.integers(0, height)))
+        if pos not in seen:
+            seen.add(pos)
+            positions.append(pos)
+    payoffs = rng.uniform(1.0, 5.0, size=n_agents)  # strictly positive: 0.0 never a real average
+    a = np.array([[x, y, 0.5, 0.5, p] for (x, y), p in zip(positions, payoffs)])
+
+    f = mod.field(a, width=width, height=height)
+
+    agent_at_cell = {pos: i for i, pos in enumerate(positions)}
+    total_payoff = list(payoffs)
+    rounds_played = [1] * n_agents  # total_payoff[j]/rounds_played[j] == payoffs[j]
+
+    checked_a_real_neighbor_average = False
+    for x in range(width):
+        for y in range(height):
+            expected = _mean_neighbor_payoff(
+                (x, y), width, height, agent_at_cell, total_payoff, rounds_played, mod.NEIGHBOR_OFFSETS
+            )
+            got = f[y, x]
+            if (x, y) in agent_at_cell:
+                assert got != got  # field() always blanks occupied cells to NaN
+            elif expected == 0.0:
+                # _mean_neighbor_payoff's "no occupied neighbor" floor;
+                # field() uses NaN for that same case instead
+                assert got != got
+            else:
+                assert got == pytest.approx(expected)
+                checked_a_real_neighbor_average = True
+    assert checked_a_real_neighbor_average
 
 
 def test_compute_trajectory_share_and_cumulative_deviation():

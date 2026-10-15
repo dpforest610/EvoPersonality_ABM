@@ -41,6 +41,17 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from run_scent_spatial_sweep_n1000 import individual_gz_path_for, out_root_for  # noqa: E402
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
+from evopersonality_abm.scent_spatial import moore_offsets  # noqa: E402
+
+# the model's own scent field (_mean_neighbor_payoff, called from
+# _run_generation with offsets=moore_offsets(radius)) uses the 8-cell
+# Moore neighborhood at the production radius=1, NOT the 4-cell von
+# Neumann neighborhood the first prototype used -- see
+# test_field_matches_model_mean_neighbor_payoff below.
+NEIGHBOR_OFFSETS = moore_offsets(1)
+
 TITLES = {"none": "M0: no movement", "random": "M1: random movement", "scent": "M2: scent-following"}
 THRESHOLDS_JSON = Path("scripts/output/scent_spatial_sweep_n1000/analysis/type_thresholds.json")
 OUT_DIR = Path("scripts/output/figures")
@@ -85,17 +96,22 @@ def tcode(a, ts, to):
     return np.where(hs & ho, 0, np.where(hs & ~ho, 1, np.where(~hs & ho, 2, 3)))
 
 
-def field(a, width=W, height=H):
-    """Scent field at empty cells: mean payoff of each cell's 4 occupied
-    orthogonal neighbors (same definition as the prototype). Occupied
-    cells are NaN (drawn black, agents drawn over them as squares)."""
+def field(a, width=W, height=H, offsets=NEIGHBOR_OFFSETS):
+    """Scent field at empty cells: mean payoff of each cell's occupied
+    8-cell Moore neighbors -- same neighborhood the model itself scores
+    scent candidates with (evopersonality_abm.spatial._mean_neighbor_payoff,
+    called with offsets=moore_offsets(radius=1); see
+    test_field_matches_model_mean_neighbor_payoff). The first prototype
+    (heatbugs_style_reference.py) used the 4-cell von Neumann neighborhood
+    instead, which did not match the model. Occupied cells are NaN (drawn
+    black, agents drawn over them as squares)."""
     pay = np.full((width, height), np.nan)
     for x, y, *_rest, p in a:
         pay[int(x), int(y)] = p
     f = np.full((height, width), np.nan)
     for x in range(width):
         for y in range(height):
-            vals = [pay[(x + dx) % width, (y + dy) % height] for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))]
+            vals = [pay[(x + dx) % width, (y + dy) % height] for dx, dy in offsets]
             vals = [v for v in vals if not np.isnan(v)]
             if vals:
                 f[y, x] = float(np.mean(vals))
@@ -173,7 +189,7 @@ def render(gens, by_gen, share, cum_dev, ts, to, title, out_path, frame_gens, fp
     fig.text(0.56, 0.01,
               f"Types = fixed median split (K_self >= {ts:.4f}, K_out >= {to:.4f}),\npooled across all 3 "
               "conditions x 30 seeds, gen>=2000.\nThe population is one continuous cloud, not four natural "
-              "groups.\nEmpty cells: black -> red -> yellow = scent of profit (mean\npayoff of 4 occupied "
+              "groups.\nEmpty cells: black -> red -> yellow = scent of profit (mean\npayoff of its 8-cell "
               f"neighbours, fixed range [{vmin:.2f}, {vmax:.2f}]).",
               fontsize=8.5, color="#222", va="bottom")
 
