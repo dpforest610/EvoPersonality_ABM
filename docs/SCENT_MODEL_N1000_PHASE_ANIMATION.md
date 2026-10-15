@@ -201,6 +201,44 @@ N=1000・41×41グリッドはN=100・13×13版より密度は同じだが点の
 10倍なので、点のサイズはN=100版のパイロット動画より大幅に小さくして
 見やすさを確保した(`size_from_kself`)。
 
+### 見た目の修正(2026-10-15)
+
+6世代分の試しデータで確認したところ、以下の3点に問題があったため修正した:
+
+1. **匂いの色の範囲**: 以前は固定範囲が`[0, 観測最大値]`で、実際の値が
+   狭い帯(例: 2.5〜3.5付近)に集まっているため画面がほぼ一様な赤になり、
+   濃淡が見えなかった。表示される値(近傍平均後の値)の2〜98パーセンタイル
+   を全コマ・3条件でプールして範囲に使うよう変更(`payoff_color_range`、
+   `--color-pctl-lo`/`--color-pctl-hi`で変更可、既定2/98)。範囲は動画内で
+   固定のまま。
+2. **カラーバーの重なり**: K_out(縦・右端)と匂いの場(以前は同じく縦・
+   右端)のラベルが重なっていた。匂いの場のカラーバーを画面下の横向きに
+   移動し、重なりを解消した。
+3. **上部の余白**: パネルの上下マージンを詰め(top: 0.87→0.92、
+   bottom: 0.14→0.22、匂いのカラーバー分の余白を確保しつつ)、3パネルを
+   以前より大きく表示できるようにした。
+
+修正後、6世代の試しデータで再確認済み(コントラストのある匂いの場、
+重ならないカラーバー、大きくなったパネルを確認)。
+
+### Mac用の再描画コマンド(修正版)
+
+新しいコードをpullしてから、1節で記録済みのファイルに対して同じ
+コマンドを実行するだけでよい(記録のやり直しは不要。スクリプトの
+インターフェースは変わっていないので、コマンド自体は以前と同じ):
+
+    git pull origin claude/lindgren-population-evolution-08fat1
+    python3 scripts/animate_scent_n1000_phase_recording.py \
+        --recording-root scripts/output/scent_spatial_sweep_n1000_phase_recording \
+        --gen-range 0-19 --out-name early
+
+    python3 scripts/animate_scent_n1000_phase_recording.py \
+        --recording-root scripts/output/scent_spatial_sweep_n1000_phase_recording \
+        --gen-range 4980-4999 --out-name late
+
+同じ`--out-name`なので、`scripts/output/figures/scent_n1000_phase_animation_{early,late}.{mp4,gif}`
+が修正版で上書きされる。
+
 ---
 
 ## 4. 受け渡し

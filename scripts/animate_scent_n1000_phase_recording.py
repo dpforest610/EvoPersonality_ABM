@@ -174,6 +174,22 @@ def mean_neighbor_payoff_grid(positions, payoff_so_far, grid_width, grid_height,
     return grid, has_neighbor
 
 
+def payoff_color_range(panel_frames, grid_width, grid_height, lo=2.0, hi=98.0):
+    """vmin/vmax for the background field, fixed across the whole video:
+    the [lo, hi] percentile of the actually-DISPLAYED grid values (after
+    neighbor-averaging), pooled across every frame and panel -- not the
+    raw payoff-so-far values (narrower, since averaging compresses the
+    range) and not [0, max] (which was dominated by rare high/low
+    outliers and left the whole field looking uniformly dark red)."""
+    vals = []
+    for frames in panel_frames:
+        for f in frames:
+            grid, has_neighbor = mean_neighbor_payoff_grid(f["positions"], f["payoff_so_far"], grid_width, grid_height)
+            vals.append(grid[has_neighbor])
+    pooled = np.concatenate(vals)
+    return float(np.percentile(pooled, lo)), float(np.percentile(pooled, hi))
+
+
 # ---------------------------------------------------------------- rendering
 
 def size_from_kself(kself):
@@ -182,12 +198,14 @@ def size_from_kself(kself):
     return 2.5 + np.asarray(kself) * 11.0
 
 
-def render(frames, grid_width, grid_height, n_phases, vmax_payoff, out_path, fps, writer_name, figsize, dpi):
+def render(frames, grid_width, grid_height, n_phases, vmin_payoff, vmax_payoff, out_path, fps, writer_name,
+           figsize, dpi):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from matplotlib.animation import FFMpegWriter, FuncAnimation, PillowWriter
-    from matplotlib.colors import ListedColormap
+    from matplotlib.cm import ScalarMappable
+    from matplotlib.colors import Normalize
 
     panel_frames = frames  # list of 3 per-condition frame lists, same length, index-aligned
     n_frames = len(panel_frames[0])
@@ -198,7 +216,10 @@ def render(frames, grid_width, grid_height, n_phases, vmax_payoff, out_path, fps
     reds.set_bad("white")
 
     fig, axes = plt.subplots(1, 3, figsize=figsize, facecolor="white")
-    fig.subplots_adjust(left=0.015, right=0.89, top=0.87, bottom=0.14, wspace=0.06)
+    # top raised from 0.87 -> 0.92 (less blank space above the panels);
+    # bottom lowered from 0.14 -> 0.22 to make room for the new horizontal
+    # scent-field colorbar below the legend, without crowding it.
+    fig.subplots_adjust(left=0.015, right=0.90, top=0.92, bottom=0.22, wspace=0.06)
     gen_text = fig.text(0.46, 0.975, "", ha="center", va="top", fontsize=16, color="black")
     move_texts = []
 
@@ -214,24 +235,32 @@ def render(frames, grid_width, grid_height, n_phases, vmax_payoff, out_path, fps
         for spine in ax.spines.values():
             spine.set_visible(False)
         im = ax.imshow(np.full((grid_height, grid_width), np.nan), origin="lower", cmap=reds,
-                        vmin=0.0, vmax=vmax_payoff, extent=(-0.5, grid_width - 0.5, -0.5, grid_height - 0.5),
+                        vmin=vmin_payoff, vmax=vmax_payoff, extent=(-0.5, grid_width - 0.5, -0.5, grid_height - 0.5),
                         zorder=1)
         sc = ax.scatter([], [], c=[], s=[], cmap="viridis", vmin=0.0, vmax=1.0,
                          edgecolors="none", linewidths=0.6, zorder=3)
         images.append(im)
         scatters.append(sc)
-        move_texts.append(ax.text(0.5, -0.045, "", transform=ax.transAxes, ha="center", va="top", fontsize=11))
+        move_texts.append(ax.text(0.5, -0.05, "", transform=ax.transAxes, ha="center", va="top", fontsize=11))
 
-    cbar1 = fig.colorbar(scatters[0], ax=axes, fraction=0.022, pad=0.012, location="right")
+    # K_out: the only colorbar on the right edge now, so it gets its own
+    # clear space (previously crowded against the scent-field colorbar,
+    # whose label overlapped it).
+    cbar1 = fig.colorbar(scatters[0], ax=axes, fraction=0.022, pad=0.015, location="right")
     cbar1.set_label("K_out", fontsize=10)
-    cbar2 = fig.colorbar(images[0], ax=axes, fraction=0.022, pad=0.065, location="right")
+
+    # scent field: moved to a horizontal colorbar below the panels
+    # (instead of a second vertical bar on the right) so the two labels
+    # no longer collide.
+    cax2 = fig.add_axes((0.30, 0.05, 0.40, 0.016))
+    cbar2 = fig.colorbar(ScalarMappable(Normalize(vmin_payoff, vmax_payoff), reds), cax=cax2, orientation="horizontal")
     cbar2.set_label("neighbor payoff-so-far (scent field)", fontsize=10)
 
     for ref_val, ref_size in [(0.0, 2.5), (0.5, 8.0), (1.0, 13.5)]:
         axes[0].scatter([], [], s=ref_size * 6, c="gray", label=f"K_self={ref_val:.1f}")
     axes[0].scatter([], [], s=40, facecolors="gray", edgecolors="white", linewidths=1.3,
                      label="moved this phase")
-    axes[0].legend(loc="upper right", bbox_to_anchor=(0.98, -0.07), frameon=False, fontsize=8,
+    axes[0].legend(loc="upper right", bbox_to_anchor=(0.98, -0.11), frameon=False, fontsize=8,
                     ncol=4, handletextpad=0.3, columnspacing=0.8)
 
     def update(i):
@@ -277,13 +306,16 @@ def main():
     p.add_argument("--subframes", type=int, default=4, help="interpolation steps per phase transition")
     p.add_argument("--mp4-fps", type=int, default=18)
     p.add_argument("--gif-fps", type=int, default=10)
+    p.add_argument("--color-pctl-lo", type=float, default=2.0,
+                   help="lower percentile of the displayed scent-field values used as the fixed vmin")
+    p.add_argument("--color-pctl-hi", type=float, default=98.0,
+                   help="upper percentile of the displayed scent-field values used as the fixed vmax")
     args = p.parse_args()
 
     lo, hi = parse_gen_range(args.gen_range)
     gen_filter = lambda g: lo <= g <= hi  # noqa: E731
 
     panel_frames = []
-    vmax = 0.0
     for _, movement in CONDITIONS:
         root = out_root_for(movement, experiment_root=args.recording_root)
         path = phase_recording_path_for(root, args.seed)
@@ -292,25 +324,25 @@ def main():
         key_frames = build_render_frames(phase_frames, args.n_phases, args.subframes, gen_filter=gen_filter)
         frames = expand_interpolated_frames(key_frames, args.grid_width, args.grid_height)
         panel_frames.append(frames)
-        for f in frames:
-            finite = f["payoff_so_far"][np.isfinite(f["payoff_so_far"])]
-            if len(finite):
-                vmax = max(vmax, float(finite.max()))
 
     n = min(len(pf) for pf in panel_frames)
     panel_frames = [pf[:n] for pf in panel_frames]
-    print(f"{n} frames/panel, vmax_payoff={vmax:.3f}")
+
+    vmin, vmax = payoff_color_range(panel_frames, args.grid_width, args.grid_height,
+                                     lo=args.color_pctl_lo, hi=args.color_pctl_hi)
+    print(f"{n} frames/panel, scent-field color range = [{vmin:.3f}, {vmax:.3f}] "
+          f"({args.color_pctl_lo:.0f}-{args.color_pctl_hi:.0f} percentile of displayed values)")
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     mp4_path = OUT_DIR / f"scent_n1000_phase_animation_{args.out_name}.mp4"
     print(f"rendering MP4 -> {mp4_path} ...", flush=True)
-    render(panel_frames, args.grid_width, args.grid_height, args.n_phases, vmax, mp4_path,
+    render(panel_frames, args.grid_width, args.grid_height, args.n_phases, vmin, vmax, mp4_path,
            fps=args.mp4_fps, writer_name="ffmpeg", figsize=(16, 9), dpi=120)
     print(f"saved {mp4_path}", flush=True)
 
     gif_path = OUT_DIR / f"scent_n1000_phase_animation_{args.out_name}.gif"
     print(f"rendering GIF -> {gif_path} ...", flush=True)
-    render(panel_frames, args.grid_width, args.grid_height, args.n_phases, vmax, gif_path,
+    render(panel_frames, args.grid_width, args.grid_height, args.n_phases, vmin, vmax, gif_path,
            fps=args.gif_fps, writer_name="pillow", figsize=(13, 7.3), dpi=85)
     print(f"saved {gif_path}", flush=True)
 

@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
@@ -146,3 +147,47 @@ def test_mean_neighbor_payoff_grid_ignores_nan_payoff():
     # at (1,1) only, not of (1,2) -- its only candidate is filtered out
     assert grid[0, 0] != grid[0, 0]  # NaN
     assert not has_neighbor[0, 0]
+
+
+def test_payoff_color_range_matches_percentiles_of_displayed_values():
+    panel_frames = [
+        [
+            dict(positions=[(1, 1), (3, 1)], payoff_so_far=np.array([2.0, 6.0])),
+            dict(positions=[(1, 1)], payoff_so_far=np.array([10.0])),
+        ],
+    ]
+    width = height = 5
+    vmin, vmax = mod.payoff_color_range(panel_frames, width, height, lo=0.0, hi=100.0)
+
+    pooled = []
+    for frames in panel_frames:
+        for f in frames:
+            grid, has_neighbor = mod.mean_neighbor_payoff_grid(f["positions"], f["payoff_so_far"], width, height)
+            pooled.append(grid[has_neighbor])
+    pooled = np.concatenate(pooled)
+    assert vmin == pytest.approx(float(pooled.min()))
+    assert vmax == pytest.approx(float(pooled.max()))
+
+
+def test_payoff_color_range_uses_the_requested_percentiles_not_just_min_max():
+    rng = np.random.default_rng(1)
+    frames = []
+    for _ in range(20):
+        n = 6
+        positions = [(int(rng.integers(0, 10)), int(rng.integers(0, 10))) for _ in range(n)]
+        payoff = rng.uniform(1.0, 5.0, size=n)
+        frames.append(dict(positions=positions, payoff_so_far=payoff))
+    panel_frames = [frames]
+
+    pooled = []
+    for f in frames:
+        grid, has_neighbor = mod.mean_neighbor_payoff_grid(f["positions"], f["payoff_so_far"], 10, 10)
+        pooled.append(grid[has_neighbor])
+    pooled = np.concatenate(pooled)
+
+    vmin, vmax = mod.payoff_color_range(panel_frames, 10, 10, lo=25.0, hi=75.0)
+    assert vmin == pytest.approx(float(np.percentile(pooled, 25.0)))
+    assert vmax == pytest.approx(float(np.percentile(pooled, 75.0)))
+    # the inner band must not simply reproduce the full min/max
+    assert vmin > float(pooled.min())
+    assert vmax < float(pooled.max())
