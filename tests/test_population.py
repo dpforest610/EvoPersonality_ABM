@@ -181,3 +181,49 @@ def test_run_evolution_is_deterministic_given_a_seed():
     for a, b in zip(stats_a, stats_b):
         assert a.memory_depths == b.memory_depths
         assert a.payoffs == b.payoffs
+
+
+# ------------------------------------------------------------------ noise_rate (see
+# docs/MARKOV_STRUCTURE_EVOLUTION_DESIGN.md section 1.2)
+
+def test_round_robin_payoffs_default_noise_rate_matches_pre_noise_behavior():
+    # noise_rate=0.0 (the default) must reproduce the exact original payoffs,
+    # with no rng required at all.
+    tables = [always_cooperate_table(), always_defect_table(), tit_for_tat_table()]
+    assert round_robin_payoffs(tables, rounds_per_duel=10) == round_robin_payoffs(
+        tables, rounds_per_duel=10, noise_rate=0.0, rng=random.Random(0)
+    )
+
+
+def test_run_evolution_default_noise_rate_matches_pre_noise_behavior():
+    stats_no_arg = run_evolution(population_size=8, generations=4, rounds_per_duel=6, seed=123)
+    stats_explicit_zero = run_evolution(
+        population_size=8, generations=4, rounds_per_duel=6, seed=123, noise_rate=0.0
+    )
+    for a, b in zip(stats_no_arg, stats_explicit_zero):
+        assert a.memory_depths == b.memory_depths
+        assert a.payoffs == b.payoffs
+
+
+def test_run_evolution_noise_rate_changes_dynamics():
+    # Same seed, only noise_rate differs: full determinism (noise_rate=0.0) must
+    # diverge from noisy play (noise_rate=1.0, every realized action flipped).
+    stats_clean = run_evolution(
+        population_size=10, generations=5, rounds_per_duel=8, seed=42, noise_rate=0.0
+    )
+    stats_noisy = run_evolution(
+        population_size=10, generations=5, rounds_per_duel=8, seed=42, noise_rate=1.0
+    )
+    assert any(a.payoffs != b.payoffs for a, b in zip(stats_clean, stats_noisy))
+
+
+def test_run_evolution_noise_rate_is_still_deterministic_given_a_seed():
+    stats_a = run_evolution(
+        population_size=8, generations=4, rounds_per_duel=6, seed=321, noise_rate=0.01
+    )
+    stats_b = run_evolution(
+        population_size=8, generations=4, rounds_per_duel=6, seed=321, noise_rate=0.01
+    )
+    for a, b in zip(stats_a, stats_b):
+        assert a.memory_depths == b.memory_depths
+        assert a.payoffs == b.payoffs

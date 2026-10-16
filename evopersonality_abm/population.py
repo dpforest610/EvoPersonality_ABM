@@ -33,19 +33,24 @@ def random_table(memory_depth: int, rng: random.Random) -> LindgrenTable:
 
 
 def round_robin_payoffs(
-    tables: Sequence[LindgrenTable], rounds_per_duel: int
+    tables: Sequence[LindgrenTable], rounds_per_duel: int,
+    noise_rate: float = 0.0, rng: Optional[random.Random] = None,
 ) -> List[float]:
     """Play every pair once; return each agent's mean payoff per round.
 
     Mean-per-round (not total) so payoffs stay comparable regardless of
     population size or duel length.
+
+    noise_rate/rng: passed straight through to duel.run_duel (implementation-
+    error noise -- see docs/MARKOV_STRUCTURE_EVOLUTION_DESIGN.md section 1.2).
+    0.0 (the default) reproduces the original fully deterministic behavior.
     """
     n = len(tables)
     total_payoff = [0.0] * n
     for i, j in itertools.combinations(range(n), 2):
         agent_i = Agent(f"{i}", tables[i].as_strategy())
         agent_j = Agent(f"{j}", tables[j].as_strategy())
-        run_duel(agent_i, agent_j, rounds=rounds_per_duel)
+        run_duel(agent_i, agent_j, rounds=rounds_per_duel, noise_rate=noise_rate, rng=rng)
         total_payoff[i] += agent_i.score
         total_payoff[j] += agent_j.score
 
@@ -133,6 +138,7 @@ def run_evolution(
     max_memory_depth: int = 6,
     min_memory_depth: int = 0,
     seed: Optional[int] = None,
+    noise_rate: float = 0.0,
 ) -> List[GenerationStats]:
     """Run the population loop and return per-generation summary stats.
 
@@ -140,13 +146,20 @@ def run_evolution(
     next generation proportional to payoff -> mutate offspring. With
     `split_rate` > 0, memory depth can shrink as well as grow, so it need
     not simply ratchet up to `max_memory_depth` and stay there.
+
+    noise_rate: implementation-error probability for every duel this
+    generation (see duel.run_duel). 0.0 (the default) reproduces the
+    original fully deterministic behavior exactly. Uses its own RNG stream
+    derived from the main one (same split-stream convention as
+    spatial.py/scent_spatial.py: `random.Random(rng.random())`).
     """
     rng = random.Random(seed)
+    rng_noise = random.Random(rng.random())
     tables = [random_table(initial_memory_depth, rng) for _ in range(population_size)]
 
     stats: List[GenerationStats] = []
     for gen in range(generations):
-        payoffs = round_robin_payoffs(tables, rounds_per_duel)
+        payoffs = round_robin_payoffs(tables, rounds_per_duel, noise_rate=noise_rate, rng=rng_noise)
         depths = [t.memory_depth for t in tables]
         stats.append(GenerationStats(generation=gen, memory_depths=depths, payoffs=payoffs))
 
