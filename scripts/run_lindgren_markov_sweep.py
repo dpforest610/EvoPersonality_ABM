@@ -101,6 +101,19 @@ def generation_stats_path(out_dir: Path, seed: int) -> Path:
     return out_dir / f"seed_{seed}_generation_stats.csv"
 
 
+def seed_is_complete(out_dir: Path, seed: int, generations: int) -> bool:
+    """generation_stats.csv is rewritten incrementally as the seed runs
+    (every probe timepoint, see run_one_seed), so its mere existence does
+    NOT mean the seed is done -- a seed stopped mid-run (e.g. by the
+    background-execution time cap) leaves a partial file behind. A seed
+    is actually complete only once that file holds all `generations` rows."""
+    path = generation_stats_path(out_dir, seed)
+    if not path.exists():
+        return False
+    with open(path, newline="") as f:
+        return sum(1 for _ in f) - 1 == generations  # -1 for the header row
+
+
 def _fmt_noise(noise_rate: float) -> str:
     return f"{noise_rate:.4f}".rstrip("0").rstrip(".").replace(".", "p") or "0"
 
@@ -312,7 +325,7 @@ def main():
     else:
         seeds = list(range(args.seed_offset, args.seed_offset + args.seeds))
 
-    pending = [s for s in seeds if not generation_stats_path(out_dir, s).exists()]
+    pending = [s for s in seeds if not seed_is_complete(out_dir, s, args.generations)]
     print(f"{len(pending)}/{len(seeds)} seeds pending (noise_rate={args.noise_rate}, probe_noise_rates={probe_noise_rates})", flush=True)
 
     # Each seed runs for many minutes; workers report newly-written
