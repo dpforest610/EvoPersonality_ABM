@@ -15,27 +15,39 @@ of --probe-noise-rates (default: this run's own evolution noise_rate
 ["primary"] plus 0.0 ["no-noise sensitivity"], per design doc section
 2.4 -- deduplicated, so a noise_rate=0.0 evolution run probes only once).
 
-Usage:
+Usage (cloud session -- keeps the working tree clean turn to turn):
     python3 scripts/run_lindgren_markov_sweep.py --seeds 10 --generations 2000 \\
-        --noise-rate 0.01 --workers 4 \\
+        --noise-rate 0.01 --workers 4 --push --push-partial-progress \\
         --out-dir scripts/output/markov_sweep_pilot_noise01
 
+Usage (Mac/production -- push only once a seed is genuinely complete):
+    python3 scripts/run_lindgren_markov_sweep.py --seeds 50 --generations 5000 \\
+        --noise-rate 0.01 --workers 4 --push \\
+        --out-dir scripts/output/markov_sweep_production_noise01
+
 Run once per evolution noise_rate condition (e.g. once with
---noise-rate 0.01 for the primary pilot, once with --noise-rate 0.0 for
-the no-noise sensitivity pilot -- design doc section 1.4).
+--noise-rate 0.01 for the primary run, once with --noise-rate 0.0 for
+the no-noise sensitivity run -- design doc section 1.4).
 
 Writes, per (seed, evolution noise_rate) run (design doc section 4):
     seed_X_generation_stats.csv                         (committed, lightweight)
     seed_X_probe_age_G_noiseN_census.csv.gz              (local only)
     seed_X_probe_age_G_noiseN_moves.csv.gz               (local only, raw move sequences)
     seed_X_probe_age_G_noiseN_summary.csv                (committed, aggregated)
-Idempotent: a (seed) whose seed_X_generation_stats.csv already exists in
---out-dir is skipped (resumable across container restarts).
+    seed_X_checkpoint.pkl                                (local only, deleted on completion)
+
+Checkpointed every --probe-interval generations: a seed interrupted
+(container reclaim, Mac sleep/crash, the cloud session's 2h background
+cap) resumes from its checkpoint instead of restarting from generation
+0. A (seed) whose seed_X_generation_stats.csv already holds the full
+--generations rows is skipped entirely (idempotent/resumable re-run).
 """
 
 import argparse
 import csv
 import gzip
+import os
+import pickle
 import queue as queue_module
 import random
 import subprocess
@@ -44,7 +56,7 @@ import time
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import Manager
 from pathlib import Path
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
@@ -99,6 +111,20 @@ def commit_and_push(paths: Sequence[Path], message: str) -> None:
 
 def generation_stats_path(out_dir: Path, seed: int) -> Path:
     return out_dir / f"seed_{seed}_generation_stats.csv"
+
+
+def checkpoint_path_for(out_dir: Path, seed: int) -> Path:
+    return out_dir / f"seed_{seed}_checkpoint.pkl"
+
+
+def _atomic_pickle_dump(path: Path, obj) -> None:
+    """Write to a temp file, then rename over `path`, so a reader never
+    sees a half-written checkpoint. Same pattern as
+    run_scent_spatial_sweep_n1000.py's _atomic_pickle_dump."""
+    tmp = path.with_name(path.name + ".tmp")
+    with open(tmp, "wb") as f:
+        pickle.dump(obj, f)
+    os.replace(tmp, path)
 
 
 def seed_is_complete(out_dir: Path, seed: int, generations: int) -> bool:
@@ -222,29 +248,56 @@ def run_one_seed(
     main_analysis_rounds: int,
     out_dir: Path,
     progress_queue=None,
+    push_partial_progress: bool = True,
 ) -> Tuple[int, List[Path]]:
-    """progress_queue (optional): a multiprocessing Queue. Each time a
-    probe timepoint's committed-tier files are written (including the
-    incrementally-rewritten generation_stats.csv), (seed, paths) is put
-    on it immediately, so the main process can commit+push incrementally
-    as the seed runs -- rather than only once this whole (many-minute)
-    function returns. See main()'s drain loop."""
+    """progress_queue (optional): a multiprocessing Queue. If
+    push_partial_progress is True (the default -- needed on the cloud
+    session, where the working tree must stay clean between turns), each
+    probe timepoint's newly-written committed-tier files (including the
+    incrementally-rewritten generation_stats.csv) are put on the queue
+    immediately, so the main process can commit+push as the seed runs
+    rather than only once this (many-minute) function returns. If False
+    (the production/Mac default -- see docs/MARKOV_STRUCTURE_EVOLUTION_DESIGN.md
+    section 1.6/Mac runbook), nothing is reported until the seed is fully
+    done, at which point every committed-tier file from the whole run is
+    reported together in one batch -- so only a genuinely complete
+    seed's files are ever committed/pushed.
+
+    Checkpointed every --probe-interval generations (piggybacking on the
+    probe cadence): if seed_X_checkpoint.pkl exists in out_dir, resumes
+    from it instead of starting over -- a crash or interruption loses at
+    most one probe-interval's worth of generations, not the whole
+    (possibly hours-long) seed. The checkpoint is deleted once the seed
+    completes."""
 
     def report(paths: List[Path]) -> None:
         if progress_queue is not None and paths:
             progress_queue.put((seed, paths))
 
-    rng = random.Random(seed)
-    rng_noise = random.Random(rng.random())  # same split-stream convention as population.run_evolution
-    rng_probe = random.Random(rng.random())
-
-    tables = [random_table(initial_memory_depth, rng) for _ in range(population_size)]
-
-    gen_rows: List[Tuple] = []
-    committed: List[Path] = []
+    ckpt_path = checkpoint_path_for(out_dir, seed)
     gs_path = generation_stats_path(out_dir, seed)
 
-    def probe_and_report(age: int) -> None:
+    resumed = ckpt_path.exists()
+    if resumed:
+        with open(ckpt_path, "rb") as f:
+            ckpt = pickle.load(f)
+        age = ckpt["age"]
+        tables = ckpt["tables"]
+        rng = ckpt["rng"]
+        rng_noise = ckpt["rng_noise"]
+        rng_probe = ckpt["rng_probe"]
+        gen_rows: List[Tuple] = ckpt["gen_rows"]
+        committed: List[Path] = ckpt["committed"]
+    else:
+        age = 0
+        rng = random.Random(seed)
+        rng_noise = random.Random(rng.random())  # same split-stream convention as population.run_evolution
+        rng_probe = random.Random(rng.random())
+        tables = [random_table(initial_memory_depth, rng) for _ in range(population_size)]
+        gen_rows = []
+        committed = []
+
+    def probe_report_and_checkpoint(age: int) -> None:
         new_paths = run_probes_for_age(
             tables, age, seed, noise_rate, probe_noise_rates, rng_probe,
             out_dir, probe_repeats, probe_rounds, main_analysis_rounds,
@@ -252,13 +305,17 @@ def run_one_seed(
         write_generation_stats(gs_path, gen_rows)  # keep the stats file in sync with progress so far
         new_paths.append(gs_path)
         committed.extend(new_paths)
-        report(new_paths)
+        if push_partial_progress:
+            report(new_paths)
+        _atomic_pickle_dump(ckpt_path, {
+            "age": age, "tables": tables, "rng": rng, "rng_noise": rng_noise,
+            "rng_probe": rng_probe, "gen_rows": gen_rows, "committed": committed,
+        })
 
-    age = 0
-    if age % probe_interval == 0:
-        probe_and_report(age)
+    if not resumed:  # a resumed checkpoint's age always already reflects a completed probe
+        probe_report_and_checkpoint(age)
 
-    for gen in range(generations):
+    for gen in range(age, generations):
         payoffs = round_robin_payoffs(tables, rounds_per_duel, noise_rate=noise_rate, rng=rng_noise)
         depths = [t.memory_depth for t in tables]
         n = len(depths)
@@ -275,14 +332,24 @@ def run_one_seed(
             )
             for t in tables
         ]
-        age += 1
+        age = gen + 1
         if age % probe_interval == 0:
-            probe_and_report(age)
+            probe_report_and_checkpoint(age)
 
-    write_generation_stats(gs_path, gen_rows)  # final write, covers any trailing generations past the last probe
-    if gs_path not in committed:
-        committed.append(gs_path)
-    report([gs_path])
+    if generations % probe_interval != 0:
+        # trailing generations past the last probe timepoint -- the stats
+        # file needs one more write to cover them. If generations IS a
+        # multiple of probe_interval, the loop's last probe already wrote
+        # (and, if push_partial_progress, already reported) everything.
+        write_generation_stats(gs_path, gen_rows)
+        if gs_path not in committed:
+            committed.append(gs_path)
+        if push_partial_progress:
+            report([gs_path])
+
+    if not push_partial_progress:
+        report(committed)  # whole-seed batch, now that it's genuinely complete
+    ckpt_path.unlink(missing_ok=True)
 
     return seed, committed
 
@@ -309,7 +376,14 @@ def main():
     p.add_argument("--main-analysis-rounds", type=int, default=20)
     p.add_argument("--workers", type=int, default=4)
     p.add_argument("--out-dir", type=str, required=True)
-    p.add_argument("--push", action="store_true", help="commit+push committed-tier files as each seed completes")
+    p.add_argument("--push", action="store_true", help="commit+push committed-tier files")
+    p.add_argument(
+        "--push-partial-progress", action="store_true", default=False,
+        help="push committed-tier files as they're written mid-seed (needed to keep a cloud "
+        "session's working tree clean between turns). Default off: push only once a seed is "
+        "fully complete, with its whole file set in one batch -- the Mac/production default "
+        "(docs/MARKOV_STRUCTURE_EVOLUTION_DESIGN.md Mac runbook: push only completed files).",
+    )
     args = p.parse_args()
 
     out_dir = Path(args.out_dir)
@@ -326,7 +400,11 @@ def main():
         seeds = list(range(args.seed_offset, args.seed_offset + args.seeds))
 
     pending = [s for s in seeds if not seed_is_complete(out_dir, s, args.generations)]
-    print(f"{len(pending)}/{len(seeds)} seeds pending (noise_rate={args.noise_rate}, probe_noise_rates={probe_noise_rates})", flush=True)
+    n_resuming = sum(1 for s in pending if checkpoint_path_for(out_dir, s).exists())
+    print(
+        f"{len(pending)}/{len(seeds)} seeds pending ({n_resuming} resuming from an in-progress checkpoint) "
+        f"(noise_rate={args.noise_rate}, probe_noise_rates={probe_noise_rates})", flush=True,
+    )
 
     # Each seed runs for many minutes; workers report newly-written
     # committed-tier files via this queue as soon as each probe timepoint
@@ -346,7 +424,7 @@ def main():
                 args.initial_memory_depth, args.point_mutation_rate, args.duplication_rate,
                 args.split_rate, args.max_memory_depth, args.min_memory_depth,
                 args.probe_interval, args.probe_repeats, args.probe_rounds,
-                args.main_analysis_rounds, out_dir, progress_queue,
+                args.main_analysis_rounds, out_dir, progress_queue, args.push_partial_progress,
             ): seed
             for seed in pending
         }
