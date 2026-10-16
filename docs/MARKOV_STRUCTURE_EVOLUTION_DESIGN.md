@@ -339,7 +339,22 @@ defection_count=2, punish_remaining+=2→残り2回D)ことを確認する。
    使った「論文の値と一致するか」のテストはできない
    (2026-10-15に別途確認済みとのことなので、ここでは不要と判断)。
 
-### 3.3 仮想参加者への適用(この段階では設計のみ、実装は2節のプローブの後)
+### 3.3 仮想参加者への適用(パイロットデータで実行済み・2026-10-16)
+
+`scripts/analyze_markov_sweep_pilot_network.py`でパイロットの全プローブデータに
+適用済み(探索的、n_boot=200、`scripts/output/markov_sweep_pilot_network.csv`
+12,300行 = 10 seed×41時点×主セット5相手×人の3群人数×2ノイズ条件)。推移図
+(`scripts/output/figures/markov_sweep_pilot_network_trends_{TFT,AllC,AllD,Random,Gradual}.png`)、
+未定義割合の報告(`scripts/output/markov_sweep_pilot_network_undefined_rates.csv`)、
+seed 1つ分の網アニメ試作(`scripts/output/figures/markov_network_anim_seed0_TFT_noise01.mp4`、
+7.3節の案Bレイアウト使用)を作成済み。目立った傾向: noise_rate=0.0では
+底底底・和和和が同時に現れる(=widest pathが定義できる)割合がnoise_rate=0.01
+よりはっきり低い — 1.4節で記録した「ノイズありの方が切り替えが多い」という
+結果と整合する。7.1節のTable 7回路リストは、ユーザーから2026-10-16に全相手分
+(TFT4・GRA5・AllC4・AllD9)を受領し`markov_recovery.NAMED_CIRCUITS`に反映済み
+(以前の「4個しか分からない」という未解決事項は解消)。
+
+### 3.3(元の文面、設計時点): 仮想参加者への適用
 
 - 各時点・各相手について、2節で得た「遺伝子型ごとの対戦系列」から、
   **人の群と同じ3通りの人数(56・46・69)**で、頻度に比例した重み付き
