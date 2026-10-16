@@ -22,6 +22,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+matplotlib.rcParams["font.family"] = "IPAGothic"  # renders 底/和/搾/惨 in titles/legends
+
 IN_PATH = Path("scripts/output/markov_sweep_pilot_network.csv")
 OUT_DIR = Path("scripts/output/figures")
 CONDITIONS = ["noise_rate=0.01", "noise_rate=0.0"]
