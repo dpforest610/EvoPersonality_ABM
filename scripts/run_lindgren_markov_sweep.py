@@ -1,0 +1,316 @@
+"""Evolution + periodic genotype probing for the Lindgren behavioral-
+Markov-structure-evolution research line -- see
+docs/MARKOV_STRUCTURE_EVOLUTION_DESIGN.md sections 1-4.
+
+For each seed, this reimplements `population.run_evolution`'s generation
+loop directly (rather than calling it as a black box) so the
+intermediate `tables` population is available for periodic genotype
+census + probing (see `evopersonality_abm/probe.py`). At every "age"
+(generations completed so far) that is a multiple of --probe-interval,
+including age 0 (the initial population) and the final age after the
+last generation, the population's unique genotypes are censused
+(`probe.census_genotypes`) and each one is dueled against every
+`probe.OPPONENTS` entry (main set + extended set, 7 total), under each
+of --probe-noise-rates (default: this run's own evolution noise_rate
+["primary"] plus 0.0 ["no-noise sensitivity"], per design doc section
+2.4 -- deduplicated, so a noise_rate=0.0 evolution run probes only once).
+
+Usage:
+    python3 scripts/run_lindgren_markov_sweep.py --seeds 10 --generations 2000 \\
+        --noise-rate 0.01 --workers 4 \\
+        --out-dir scripts/output/markov_sweep_pilot_noise01
+
+Run once per evolution noise_rate condition (e.g. once with
+--noise-rate 0.01 for the primary pilot, once with --noise-rate 0.0 for
+the no-noise sensitivity pilot -- design doc section 1.4).
+
+Writes, per (seed, evolution noise_rate) run (design doc section 4):
+    seed_X_generation_stats.csv                         (committed, lightweight)
+    seed_X_probe_age_G_noiseN_census.csv.gz              (local only)
+    seed_X_probe_age_G_noiseN_moves.csv.gz               (local only, raw move sequences)
+    seed_X_probe_age_G_noiseN_summary.csv                (committed, aggregated)
+Idempotent: a (seed) whose seed_X_generation_stats.csv already exists in
+--out-dir is skipped (resumable across container restarts).
+"""
+
+import argparse
+import csv
+import gzip
+import random
+import subprocess
+import sys
+import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from pathlib import Path
+from typing import Dict, List, Sequence, Tuple
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT))
+
+from evopersonality_abm.population import (
+    mutate_individual,
+    random_table,
+    round_robin_payoffs,
+    select_and_reproduce,
+)
+from evopersonality_abm.probe import (
+    EXTENDED_SET,
+    MAIN_SET,
+    census_genotypes,
+    run_probe_duel,
+)
+
+PROBE_OPPONENTS = MAIN_SET + EXTENDED_SET  # 7 total, design doc section 2.5
+
+
+def _git(*args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", *args], cwd=REPO_ROOT, capture_output=True, text=True)
+
+
+def commit_and_push(paths: Sequence[Path], message: str) -> None:
+    """Commit+push the given (already-written, committed-tier) paths,
+    retrying push on transient failure. Mirrors run_seed_sweep.py."""
+    existing = [str(p) for p in paths if p.exists()]
+    if not existing:
+        return
+    add = _git("add", *existing)
+    if add.returncode != 0:
+        print(f"git add failed for {message}: {add.stderr.strip()}", flush=True)
+        return
+    commit = _git("commit", "-m", message)
+    if commit.returncode != 0:
+        if "nothing to commit" in (commit.stdout + commit.stderr):
+            return
+        print(f"git commit failed for {message}: {commit.stderr.strip()}", flush=True)
+        return
+    delay = 2
+    for attempt in range(4):
+        push = _git("push")
+        if push.returncode == 0:
+            print(f"pushed: {message}", flush=True)
+            return
+        print(f"git push failed (attempt {attempt + 1}) for {message}: {push.stderr.strip()}", flush=True)
+        time.sleep(delay)
+        delay *= 2
+    print(f"git push ultimately failed for: {message}", flush=True)
+
+
+def generation_stats_path(out_dir: Path, seed: int) -> Path:
+    return out_dir / f"seed_{seed}_generation_stats.csv"
+
+
+def _fmt_noise(noise_rate: float) -> str:
+    return f"{noise_rate:.4f}".rstrip("0").rstrip(".").replace(".", "p") or "0"
+
+
+def census_path(out_dir: Path, seed: int, age: int) -> Path:
+    return out_dir / f"seed_{seed}_probe_age_{age}_census.csv.gz"
+
+
+def moves_path(out_dir: Path, seed: int, age: int, noise_rate: float) -> Path:
+    return out_dir / f"seed_{seed}_probe_age_{age}_noise{_fmt_noise(noise_rate)}_moves.csv.gz"
+
+
+def summary_path(out_dir: Path, seed: int, age: int, noise_rate: float) -> Path:
+    return out_dir / f"seed_{seed}_probe_age_{age}_noise{_fmt_noise(noise_rate)}_summary.csv"
+
+
+def write_genotype_census(path: Path, census: List[Tuple]) -> None:
+    with gzip.open(path, "wt", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["genotype_id", "memory_depth", "frequency", "table", "prehistory"])
+        for gid, (key, freq, rep) in enumerate(census):
+            w.writerow([gid, rep.memory_depth, freq, ",".join(map(str, rep.table)), ",".join(map(str, rep.prehistory))])
+
+
+def run_probes_for_age(
+    tables, age: int, seed: int, noise_rate: float, probe_noise_rates: Sequence[float],
+    rng_probe: random.Random, out_dir: Path, probe_repeats: int, probe_rounds: int,
+    main_analysis_rounds: int,
+) -> List[Path]:
+    """Census + duel every unique genotype against every PROBE_OPPONENTS
+    entry, under every probe noise rate. Writes census (once per age,
+    shared across probe_noise_rates), raw moves (local), and summary
+    (committed) files. Returns the committed-tier paths written."""
+    census = census_genotypes(tables)
+    write_genotype_census(census_path(out_dir, seed, age), census)
+
+    committed: List[Path] = []
+    for probe_noise_rate in probe_noise_rates:
+        moves_rows: List[Tuple] = []
+        summary_rows: List[Tuple] = []
+        for gid, (key, freq, rep) in enumerate(census):
+            for opponent_name in PROBE_OPPONENTS:
+                own_coop_20 = own_coop_full = opp_coop_20 = opp_coop_full = 0
+                for repeat in range(probe_repeats):
+                    own_moves, opp_moves = run_probe_duel(
+                        rep, opponent_name, rng_probe, rounds=probe_rounds, noise_rate=probe_noise_rate
+                    )
+                    for r, (om, pm) in enumerate(zip(own_moves, opp_moves), start=1):
+                        moves_rows.append((gid, opponent_name, repeat, r, om, pm))
+                    own_coop_20 += sum(1 for m in own_moves[:main_analysis_rounds] if m == "C")
+                    opp_coop_20 += sum(1 for m in opp_moves[:main_analysis_rounds] if m == "C")
+                    own_coop_full += sum(1 for m in own_moves if m == "C")
+                    opp_coop_full += sum(1 for m in opp_moves if m == "C")
+                n = probe_repeats
+                summary_rows.append((
+                    gid, rep.memory_depth, freq, opponent_name, n,
+                    own_coop_20 / (n * main_analysis_rounds),
+                    own_coop_full / (n * probe_rounds),
+                    opp_coop_20 / (n * main_analysis_rounds),
+                    opp_coop_full / (n * probe_rounds),
+                ))
+
+        with gzip.open(moves_path(out_dir, seed, age, probe_noise_rate), "wt", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["genotype_id", "opponent", "repeat", "round", "own_move", "opp_move"])
+            w.writerows(moves_rows)
+
+        sp = summary_path(out_dir, seed, age, probe_noise_rate)
+        with open(sp, "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow([
+                "genotype_id", "memory_depth", "frequency", "opponent", "n_repeats",
+                "own_coop_rate_20", "own_coop_rate_full", "opp_coop_rate_20", "opp_coop_rate_full",
+            ])
+            for row in summary_rows:
+                w.writerow([row[0], row[1], row[2], row[3], row[4], f"{row[5]:.4f}", f"{row[6]:.4f}", f"{row[7]:.4f}", f"{row[8]:.4f}"])
+        committed.append(sp)
+
+    return committed
+
+
+def run_one_seed(
+    seed: int,
+    noise_rate: float,
+    probe_noise_rates: Tuple[float, ...],
+    population_size: int,
+    generations: int,
+    rounds_per_duel: int,
+    initial_memory_depth: int,
+    point_mutation_rate: float,
+    duplication_rate: float,
+    split_rate: float,
+    max_memory_depth: int,
+    min_memory_depth: int,
+    probe_interval: int,
+    probe_repeats: int,
+    probe_rounds: int,
+    main_analysis_rounds: int,
+    out_dir: Path,
+) -> Tuple[int, List[Path]]:
+    rng = random.Random(seed)
+    rng_noise = random.Random(rng.random())  # same split-stream convention as population.run_evolution
+    rng_probe = random.Random(rng.random())
+
+    tables = [random_table(initial_memory_depth, rng) for _ in range(population_size)]
+
+    gen_rows: List[Tuple] = []
+    committed: List[Path] = []
+
+    age = 0
+    if age % probe_interval == 0:
+        committed += run_probes_for_age(
+            tables, age, seed, noise_rate, probe_noise_rates, rng_probe,
+            out_dir, probe_repeats, probe_rounds, main_analysis_rounds,
+        )
+
+    for gen in range(generations):
+        payoffs = round_robin_payoffs(tables, rounds_per_duel, noise_rate=noise_rate, rng=rng_noise)
+        depths = [t.memory_depth for t in tables]
+        n = len(depths)
+        mean_depth = sum(depths) / n
+        std_depth = (sum((d - mean_depth) ** 2 for d in depths) / n) ** 0.5
+        mean_payoff = sum(payoffs) / len(payoffs)
+        gen_rows.append((gen, mean_depth, std_depth, min(depths), max(depths), mean_payoff))
+
+        tables = select_and_reproduce(tables, payoffs, rng)
+        tables = [
+            mutate_individual(
+                t, rng, point_mutation_rate, duplication_rate, max_memory_depth,
+                split_rate=split_rate, min_memory_depth=min_memory_depth,
+            )
+            for t in tables
+        ]
+        age += 1
+        if age % probe_interval == 0:
+            committed += run_probes_for_age(
+                tables, age, seed, noise_rate, probe_noise_rates, rng_probe,
+                out_dir, probe_repeats, probe_rounds, main_analysis_rounds,
+            )
+
+    gs_path = generation_stats_path(out_dir, seed)
+    with open(gs_path, "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["generation", "mean_depth", "std_depth", "min_depth", "max_depth", "mean_payoff"])
+        for row in gen_rows:
+            w.writerow([row[0], f"{row[1]:.4f}", f"{row[2]:.4f}", row[3], row[4], f"{row[5]:.4f}"])
+    committed.append(gs_path)
+
+    return seed, committed
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--seeds", type=int, default=10)
+    p.add_argument("--seed-offset", type=int, default=0)
+    p.add_argument("--seed-list", type=str, default=None, help="comma-separated explicit seeds, overrides --seeds/--seed-offset")
+    p.add_argument("--population-size", type=int, default=100)
+    p.add_argument("--generations", type=int, default=2000)
+    p.add_argument("--rounds-per-duel", type=int, default=50)
+    p.add_argument("--initial-memory-depth", type=int, default=1)
+    p.add_argument("--point-mutation-rate", type=float, default=0.05)
+    p.add_argument("--duplication-rate", type=float, default=0.02)
+    p.add_argument("--split-rate", type=float, default=0.02)
+    p.add_argument("--max-memory-depth", type=int, default=6)
+    p.add_argument("--min-memory-depth", type=int, default=0)
+    p.add_argument("--noise-rate", type=float, default=0.01, help="evolution-run implementation-error rate (design doc section 1.2)")
+    p.add_argument("--probe-noise-rates", type=str, default=None, help="comma-separated override; default is {--noise-rate, 0.0} deduplicated")
+    p.add_argument("--probe-interval", type=int, default=50)
+    p.add_argument("--probe-repeats", type=int, default=30)
+    p.add_argument("--probe-rounds", type=int, default=100)
+    p.add_argument("--main-analysis-rounds", type=int, default=20)
+    p.add_argument("--workers", type=int, default=4)
+    p.add_argument("--out-dir", type=str, required=True)
+    p.add_argument("--push", action="store_true", help="commit+push committed-tier files as each seed completes")
+    args = p.parse_args()
+
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.probe_noise_rates is not None:
+        probe_noise_rates = tuple(sorted({float(x) for x in args.probe_noise_rates.split(",") if x.strip() != ""}))
+    else:
+        probe_noise_rates = tuple(sorted({args.noise_rate, 0.0}))
+
+    if args.seed_list is not None:
+        seeds = [int(s) for s in args.seed_list.split(",") if s.strip() != ""]
+    else:
+        seeds = list(range(args.seed_offset, args.seed_offset + args.seeds))
+
+    pending = [s for s in seeds if not generation_stats_path(out_dir, s).exists()]
+    print(f"{len(pending)}/{len(seeds)} seeds pending (noise_rate={args.noise_rate}, probe_noise_rates={probe_noise_rates})", flush=True)
+
+    with ProcessPoolExecutor(max_workers=args.workers) as ex:
+        futures = {
+            ex.submit(
+                run_one_seed, seed, args.noise_rate, probe_noise_rates,
+                args.population_size, args.generations, args.rounds_per_duel,
+                args.initial_memory_depth, args.point_mutation_rate, args.duplication_rate,
+                args.split_rate, args.max_memory_depth, args.min_memory_depth,
+                args.probe_interval, args.probe_repeats, args.probe_rounds,
+                args.main_analysis_rounds, out_dir,
+            ): seed
+            for seed in pending
+        }
+        for fut in as_completed(futures):
+            seed, committed = fut.result()
+            print(f"seed={seed} done ({len(committed)} committed-tier files)", flush=True)
+            if args.push:
+                commit_and_push(committed, f"Markov sweep: seed={seed} noise_rate={args.noise_rate} done")
+
+    print("all seeds done", flush=True)
+
+
+if __name__ == "__main__":
+    main()
