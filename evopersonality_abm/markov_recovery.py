@@ -211,6 +211,11 @@ NAMED_CIRCUITS: Dict[str, List[List[str]]] = {
         ["底底底", "底底惨", "底惨惨", "惨惨惨", "惨惨底", "惨底底", "底底底"],
         ["底惨底", "惨底惨", "底惨底"],
     ],
+    # RAN's circuit (added 2026-10-16, the paper's "Bridge"): the same
+    # 2-node reciprocal circuit as TFT's/GRA's 底惨底⇄惨底惨 entries.
+    "RAN": [
+        ["底惨底", "惨底惨", "底惨底"],
+    ],
 }
 
 

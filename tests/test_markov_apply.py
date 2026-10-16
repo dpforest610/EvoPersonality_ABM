@@ -116,10 +116,30 @@ def test_network_metrics_recovery_defined_when_goal_reachable():
         # just confirm a reachable goal gives a non-None threshold.
     }
     edges[("惨惨惨", "和和和")] = 0.4
-    m = network_metrics(edges, "Random")  # Random has no named circuits
-    assert m["jstars"] == {}
+    m = network_metrics(edges, "Random")
+    # Random (vocab/circuit-list key "RAN") has exactly 1 named circuit
+    # (the Bridge, 底惨底<->惨底惨); neither of its edges is present here.
+    assert m["jstars"] == {0: 0.0}
     assert m["has_top3"] is True
     assert m["recovery"] == min(0.9, 0.5, 0.4)  # widest_path_threshold's bottleneck
+
+
+def test_network_metrics_maps_probe_opponent_name_to_circuit_list_key():
+    # regression test for the 2026-10-16 bug: NAMED_CIRCUITS is keyed by
+    # the markov_recovery vocab label ("GRA"/"RAN"), not the probe.py
+    # opponent name ("Gradual"/"Random") -- network_metrics must map
+    # through OPPONENT_INFO, not look NAMED_CIRCUITS up by `opponent` directly.
+    from evopersonality_abm.markov_recovery import NAMED_CIRCUITS
+
+    edges = {("底惨底", "惨底惨"): 0.6, ("惨底惨", "底惨底"): 0.8}
+    m_gradual = network_metrics(edges, "Gradual")
+    assert len(m_gradual["jstars"]) == len(NAMED_CIRCUITS["GRA"])
+    # GRA's circuit #2 is exactly this 2-node reciprocal pair
+    assert m_gradual["jstars"][2] == min(0.6, 0.8)
+
+    m_random = network_metrics(edges, "Random")
+    assert len(m_random["jstars"]) == len(NAMED_CIRCUITS["RAN"]) == 1
+    assert m_random["jstars"][0] == min(0.6, 0.8)
 
 
 # ------------------------------------------------------------------ load_human_weights / similarity_to_human

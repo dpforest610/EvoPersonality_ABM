@@ -138,8 +138,8 @@ def test_cycle_jstar_single_node_walk_is_empty():
 
 # ------------------------------------------------------------------ NAMED_CIRCUITS (Table 7's circuit list, 2026-10-16)
 
-def test_named_circuits_covers_exactly_the_four_opponents_with_a_given_list():
-    assert set(NAMED_CIRCUITS) == {"TFT", "GRA", "AllC", "AllD"}
+def test_named_circuits_covers_exactly_the_five_opponents_with_a_given_list():
+    assert set(NAMED_CIRCUITS) == {"TFT", "GRA", "AllC", "AllD", "RAN"}
 
 
 def test_named_circuits_counts_match_what_was_given():
@@ -147,6 +147,7 @@ def test_named_circuits_counts_match_what_was_given():
     assert len(NAMED_CIRCUITS["GRA"]) == 5
     assert len(NAMED_CIRCUITS["AllC"]) == 4
     assert len(NAMED_CIRCUITS["AllD"]) == 9
+    assert len(NAMED_CIRCUITS["RAN"]) == 1
 
 
 def test_named_circuits_are_closed_walks_except_the_allc_bridge():

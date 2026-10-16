@@ -99,11 +99,19 @@ def resample_virtual_group(
 def network_metrics(edges: Dict[Tuple[str, str], float], opponent: str) -> dict:
     """One bootstrap network's metrics: widest-path recovery (底底底->和和和)
     and descent (和和和->底底底), Table 7 j* for each of the opponent's
-    named circuits (markov_recovery.NAMED_CIRCUITS; empty for an opponent
-    with no named circuits, e.g. Random), and the largest j>=.40
-    strongly-connected component (Table 10)."""
+    named circuits (markov_recovery.NAMED_CIRCUITS), and the largest
+    j>=.40 strongly-connected component (Table 10).
+
+    `opponent` is the probe.py name (e.g. "Gradual", "Random") -- NAMED_CIRCUITS
+    is keyed by the markov_recovery vocab label instead (e.g. "GRA", "RAN"),
+    so this maps through OPPONENT_INFO before the lookup. Bug fixed
+    2026-10-16: looking NAMED_CIRCUITS up directly by the probe.py name
+    silently returned [] for every "Gradual"/"Random" call (no opponent
+    name happens to collide with the wrong key by accident), so GRA's and
+    RAN's circuits were never actually applied before this fix."""
     nodes = {x for e in edges for x in e}
-    jstars = {i: cycle_jstar(edges, seq) for i, seq in enumerate(NAMED_CIRCUITS.get(opponent, []))}
+    circuit_key = OPPONENT_INFO.get(opponent, (opponent, opponent))[1]
+    jstars = {i: cycle_jstar(edges, seq) for i, seq in enumerate(NAMED_CIRCUITS.get(circuit_key, []))}
     sccs = strongly_connected_components(edges, threshold=0.40)
     return {
         "has_bottom3": "底底底" in nodes,
