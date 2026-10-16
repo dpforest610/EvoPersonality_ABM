@@ -4,6 +4,7 @@ import random
 import pytest
 
 from evopersonality_abm.markov_recovery import (
+    NAMED_CIRCUITS,
     build_edges,
     count_simple_cycles,
     cycle_jstar,
@@ -133,6 +134,55 @@ def test_cycle_jstar_missing_edge_counts_as_zero():
 
 def test_cycle_jstar_single_node_walk_is_empty():
     assert cycle_jstar({}, ["A"]) == 0.0
+
+
+# ------------------------------------------------------------------ NAMED_CIRCUITS (Table 7's circuit list, 2026-10-16)
+
+def test_named_circuits_covers_exactly_the_four_opponents_with_a_given_list():
+    assert set(NAMED_CIRCUITS) == {"TFT", "GRA", "AllC", "AllD"}
+
+
+def test_named_circuits_counts_match_what_was_given():
+    assert len(NAMED_CIRCUITS["TFT"]) == 4
+    assert len(NAMED_CIRCUITS["GRA"]) == 5
+    assert len(NAMED_CIRCUITS["AllC"]) == 4
+    assert len(NAMED_CIRCUITS["AllD"]) == 9
+
+
+def test_named_circuits_are_closed_walks_except_the_allc_bridge():
+    for opponent, circuits in NAMED_CIRCUITS.items():
+        for seq in circuits:
+            is_bridge = opponent == "AllC" and seq == ["和和和", "和和搾"]
+            if is_bridge:
+                assert seq[0] != seq[-1]
+            else:
+                assert seq[0] == seq[-1], f"{opponent} circuit not closed: {seq}"
+
+
+def test_named_circuits_consecutive_nodes_form_valid_3gram_transitions():
+    # every consecutive pair (a, b) in every circuit must satisfy the same
+    # a[-2:] == b[:2] rule build_edges uses to decide an edge can exist.
+    for opponent, circuits in NAMED_CIRCUITS.items():
+        for seq in circuits:
+            for a, b in zip(seq, seq[1:]):
+                assert len(a) == 3 and len(b) == 3
+                assert a[-2:] == b[:2], f"{opponent}: {a} -> {b} is not a valid 3-gram transition"
+
+
+def test_named_circuits_nodes_respect_opponent_vocab_restriction():
+    restricted = {"AllC": set("和搾"), "AllD": set("惨底")}
+    for opponent, allowed in restricted.items():
+        for seq in NAMED_CIRCUITS[opponent]:
+            for node in seq:
+                assert set(node) <= allowed, f"{opponent} node {node} uses chars outside {allowed}"
+
+
+def test_named_circuits_cycle_jstar_runs_on_every_circuit_without_error():
+    # sanity: each circuit is well-formed enough for cycle_jstar to run
+    # (returns 0.0, the "missing edge" value, on an empty edge dict).
+    for opponent, circuits in NAMED_CIRCUITS.items():
+        for seq in circuits:
+            assert cycle_jstar({}, seq) == 0.0
 
 
 # ------------------------------------------------------------------ strongly_connected_components (Table 10)

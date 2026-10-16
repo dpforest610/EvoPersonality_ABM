@@ -174,6 +174,46 @@ def strongly_connected_components(edges: Dict[Tuple[str, str], float], threshold
     return result
 
 
+NAMED_CIRCUITS: Dict[str, List[List[str]]] = {
+    # Table 7's circuits, one list per opponent -- verbatim from the user
+    # (2026-10-16), the state symbols kept exactly as given (kanji). Each
+    # entry is a closed walk (first == last node) for cycle_jstar, except
+    # AllC's 4th entry, an explicit single-edge "bridge" (not a closed
+    # walk -- cycle_jstar on a 2-node sequence just returns that one
+    # edge's own weight, which is the intended degenerate case).
+    "TFT": [
+        ["和和和", "和和搾", "和搾惨", "搾惨和", "惨和和", "和和和"],
+        ["搾惨搾", "惨搾惨", "搾惨搾"],
+        ["底底底", "底底惨", "底惨搾", "惨搾底", "搾底底", "底底底"],
+        ["底底底", "底底惨", "底惨和", "惨和搾", "和搾底", "搾底底", "底底底"],
+    ],
+    "GRA": [
+        ["底底底", "底底惨", "底惨底", "惨底底", "底底底"],
+        ["底底惨", "底惨底", "惨底底", "底底惨"],
+        ["底惨底", "惨底惨", "底惨底"],
+        ["和和和", "和和搾", "和搾惨", "搾惨和", "惨和和", "和和和"],
+        ["底惨惨", "惨惨底", "惨底惨", "底惨惨"],
+    ],
+    "AllC": [
+        ["和搾搾", "搾搾和", "搾和搾", "和搾搾"],
+        ["和和搾", "和搾搾", "搾搾和", "搾和和", "和和搾"],
+        ["和和和", "和和搾", "和搾和", "搾和和", "和和和"],
+        ["和和和", "和和搾"],  # single-edge bridge
+    ],
+    "AllD": [
+        ["底惨惨", "惨惨底", "惨底惨", "底惨惨"],
+        ["底底惨", "底惨底", "惨底底", "底底惨"],
+        ["底底底", "底底惨", "底惨底", "惨底底", "底底底"],
+        ["底底惨", "底惨惨", "惨惨底", "惨底底", "底底惨"],
+        ["底底底", "底底惨", "底惨惨", "惨惨底", "惨底底", "底底底"],
+        ["底惨惨", "惨惨惨", "惨惨底", "惨底惨", "底惨惨"],
+        ["底惨惨", "惨惨惨", "惨惨底", "惨底底", "底底惨", "底惨惨"],
+        ["底底底", "底底惨", "底惨惨", "惨惨惨", "惨惨底", "惨底底", "底底底"],
+        ["底惨底", "惨底惨", "底惨底"],
+    ],
+}
+
+
 def count_simple_cycles(edges: Dict[Tuple[str, str], float], threshold: float, max_length: int = 6) -> int:
     """NEW definition for Table 12 (the original R `generate_all_cycles`
     could not be recovered -- see design doc section 7.1): the number of
