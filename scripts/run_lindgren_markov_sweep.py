@@ -36,11 +36,13 @@ Idempotent: a (seed) whose seed_X_generation_stats.csv already exists in
 import argparse
 import csv
 import gzip
+import queue as queue_module
 import random
 import subprocess
 import sys
 import time
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import Manager
 from pathlib import Path
 from typing import Dict, List, Sequence, Tuple
 
@@ -180,6 +182,14 @@ def run_probes_for_age(
     return committed
 
 
+def write_generation_stats(path: Path, gen_rows: List[Tuple]) -> None:
+    with open(path, "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["generation", "mean_depth", "std_depth", "min_depth", "max_depth", "mean_payoff"])
+        for row in gen_rows:
+            w.writerow([row[0], f"{row[1]:.4f}", f"{row[2]:.4f}", row[3], row[4], f"{row[5]:.4f}"])
+
+
 def run_one_seed(
     seed: int,
     noise_rate: float,
@@ -198,7 +208,19 @@ def run_one_seed(
     probe_rounds: int,
     main_analysis_rounds: int,
     out_dir: Path,
+    progress_queue=None,
 ) -> Tuple[int, List[Path]]:
+    """progress_queue (optional): a multiprocessing Queue. Each time a
+    probe timepoint's committed-tier files are written (including the
+    incrementally-rewritten generation_stats.csv), (seed, paths) is put
+    on it immediately, so the main process can commit+push incrementally
+    as the seed runs -- rather than only once this whole (many-minute)
+    function returns. See main()'s drain loop."""
+
+    def report(paths: List[Path]) -> None:
+        if progress_queue is not None and paths:
+            progress_queue.put((seed, paths))
+
     rng = random.Random(seed)
     rng_noise = random.Random(rng.random())  # same split-stream convention as population.run_evolution
     rng_probe = random.Random(rng.random())
@@ -207,13 +229,21 @@ def run_one_seed(
 
     gen_rows: List[Tuple] = []
     committed: List[Path] = []
+    gs_path = generation_stats_path(out_dir, seed)
 
-    age = 0
-    if age % probe_interval == 0:
-        committed += run_probes_for_age(
+    def probe_and_report(age: int) -> None:
+        new_paths = run_probes_for_age(
             tables, age, seed, noise_rate, probe_noise_rates, rng_probe,
             out_dir, probe_repeats, probe_rounds, main_analysis_rounds,
         )
+        write_generation_stats(gs_path, gen_rows)  # keep the stats file in sync with progress so far
+        new_paths.append(gs_path)
+        committed.extend(new_paths)
+        report(new_paths)
+
+    age = 0
+    if age % probe_interval == 0:
+        probe_and_report(age)
 
     for gen in range(generations):
         payoffs = round_robin_payoffs(tables, rounds_per_duel, noise_rate=noise_rate, rng=rng_noise)
@@ -234,18 +264,12 @@ def run_one_seed(
         ]
         age += 1
         if age % probe_interval == 0:
-            committed += run_probes_for_age(
-                tables, age, seed, noise_rate, probe_noise_rates, rng_probe,
-                out_dir, probe_repeats, probe_rounds, main_analysis_rounds,
-            )
+            probe_and_report(age)
 
-    gs_path = generation_stats_path(out_dir, seed)
-    with open(gs_path, "w", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["generation", "mean_depth", "std_depth", "min_depth", "max_depth", "mean_payoff"])
-        for row in gen_rows:
-            w.writerow([row[0], f"{row[1]:.4f}", f"{row[2]:.4f}", row[3], row[4], f"{row[5]:.4f}"])
-    committed.append(gs_path)
+    write_generation_stats(gs_path, gen_rows)  # final write, covers any trailing generations past the last probe
+    if gs_path not in committed:
+        committed.append(gs_path)
+    report([gs_path])
 
     return seed, committed
 
@@ -291,6 +315,16 @@ def main():
     pending = [s for s in seeds if not generation_stats_path(out_dir, s).exists()]
     print(f"{len(pending)}/{len(seeds)} seeds pending (noise_rate={args.noise_rate}, probe_noise_rates={probe_noise_rates})", flush=True)
 
+    # Each seed runs for many minutes; workers report newly-written
+    # committed-tier files via this queue as soon as each probe timepoint
+    # is done (see run_one_seed's `report`), so the main process can
+    # commit+push incrementally instead of only once per (long) seed --
+    # this keeps the working tree from accumulating untracked files for
+    # the whole duration of a seed's run.
+    manager = Manager()
+    progress_queue = manager.Queue()
+    flush_every_seconds = 20
+
     with ProcessPoolExecutor(max_workers=args.workers) as ex:
         futures = {
             ex.submit(
@@ -299,15 +333,46 @@ def main():
                 args.initial_memory_depth, args.point_mutation_rate, args.duplication_rate,
                 args.split_rate, args.max_memory_depth, args.min_memory_depth,
                 args.probe_interval, args.probe_repeats, args.probe_rounds,
-                args.main_analysis_rounds, out_dir,
+                args.main_analysis_rounds, out_dir, progress_queue,
             ): seed
             for seed in pending
         }
-        for fut in as_completed(futures):
-            seed, committed = fut.result()
-            print(f"seed={seed} done ({len(committed)} committed-tier files)", flush=True)
-            if args.push:
-                commit_and_push(committed, f"Markov sweep: seed={seed} noise_rate={args.noise_rate} done")
+        remaining = set(futures.keys())
+        accumulated: List[Path] = []
+        last_flush = time.time()
+
+        def flush(message: str) -> None:
+            nonlocal accumulated, last_flush
+            if accumulated and args.push:
+                commit_and_push(accumulated, message)
+            accumulated = []
+            last_flush = time.time()
+
+        while remaining:
+            try:
+                seed, paths = progress_queue.get(timeout=2)
+                accumulated.extend(paths)
+            except queue_module.Empty:
+                pass
+
+            done_now = {fut for fut in remaining if fut.done()}
+            for fut in done_now:
+                seed = futures[fut]
+                _, committed = fut.result()
+                remaining.discard(fut)
+                print(f"seed={seed} done ({len(committed)} committed-tier files)", flush=True)
+
+            if accumulated and (time.time() - last_flush >= flush_every_seconds or not remaining):
+                flush(f"Markov sweep progress (noise_rate={args.noise_rate}, {len(accumulated)} files)")
+
+        # drain anything still sitting in the queue after all seeds finished
+        while True:
+            try:
+                seed, paths = progress_queue.get_nowait()
+                accumulated.extend(paths)
+            except queue_module.Empty:
+                break
+        flush(f"Markov sweep progress (noise_rate={args.noise_rate}, final batch)")
 
     print("all seeds done", flush=True)
 
