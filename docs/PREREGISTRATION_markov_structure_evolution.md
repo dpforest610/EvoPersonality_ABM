@@ -1,6 +1,9 @@
 # 事前登録(案):Lindgren モデルにおける行動マルコフ構造の進化
 
 - 状態:**確定**
+- 確定コミット:`ccc0b1b7a76f22e150e7c097b1757b1fb8e54e0e`(2026-10-17T00:53:00+00:00) —
+  この文書の全文(本行を除く)がこの時点で固定されたことの証跡。本番データは
+  まだ存在しなかった(下記)。
 - 本番データ:未生成(この文書の確定・コミット後に生成する)
 - 関連:docs/MARKOV_STRUCTURE_EVOLUTION_DESIGN.md、docs/MARKOV_STRUCTURE_EVOLUTION_MAC_RUNBOOK.md、
   人の研究(JOEP 原稿:3ステップマルコフ網、Table 7・8・10・15)
