@@ -96,6 +96,104 @@ def resample_virtual_group(
     return [rng.choice(series_by_genotype[g]) for g in chosen]
 
 
+def load_genotype_identities(path: Path) -> Dict[int, Tuple[int, str, str]]:
+    """genotype_id -> (memory_depth, table, prehistory) identity tuple,
+    from a census.csv.gz file. Unlike genotype_id (only meaningful within
+    one seed's own census), this identity tuple is comparable ACROSS
+    seeds -- needed for the cross-lineage sampling scheme's diversity
+    metrics below (design doc 2026-10-16, "系統間抽出")."""
+    with gzip.open(path, "rt", newline="") as f:
+        return {
+            int(row["genotype_id"]): (int(row["memory_depth"]), row["table"], row["prehistory"])
+            for row in csv.DictReader(f)
+        }
+
+
+def resample_within_seed_group_with_identity(
+    frequencies: Dict[int, int],
+    series_by_genotype: Dict[int, List[str]],
+    identities: Dict[int, Tuple[int, str, str]],
+    group_size: int,
+    rng: random.Random,
+) -> Tuple[List[str], List[Tuple[int, str, str]]]:
+    """Scheme (A), "集団内抽出" (within-population sampling): the same draw
+    as resample_virtual_group, but also returns each draw's genotype
+    identity, for group_diversity_metrics below."""
+    genotype_ids = [g for g in frequencies if series_by_genotype.get(g)]
+    weights = [frequencies[g] for g in genotype_ids]
+    chosen = rng.choices(genotype_ids, weights=weights, k=group_size)
+    series = [rng.choice(series_by_genotype[g]) for g in chosen]
+    idents = [identities[g] for g in chosen]
+    return series, idents
+
+
+SeedPool = Tuple[Dict[int, int], Dict[int, List[str]], Dict[int, Tuple[int, str, str]]]
+
+
+def resample_cross_seed_group(
+    seed_pools: Dict[int, SeedPool],
+    group_size: int,
+    rng: random.Random,
+) -> Tuple[List[str], List[Tuple[int, str, str]]]:
+    """Scheme (B), "系統間抽出" (cross-lineage sampling, design doc
+    2026-10-16): draws group_size DISTINCT seeds (without replacement --
+    each virtual participant corresponds to one independently-evolved
+    lineage, the way each human participant is one person), one
+    individual per seed (frequency-weighted within that seed).
+    seed_pools: {seed: (frequencies, series_by_genotype, identities)}."""
+    seeds = list(seed_pools.keys())
+    if group_size > len(seeds):
+        raise ValueError(f"group_size={group_size} exceeds available seeds={len(seeds)}")
+    chosen_seeds = rng.sample(seeds, group_size)
+    series: List[str] = []
+    idents: List[Tuple[int, str, str]] = []
+    for s in chosen_seeds:
+        frequencies, series_by_genotype, identities = seed_pools[s]
+        genotype_ids = [g for g in frequencies if series_by_genotype.get(g)]
+        weights = [frequencies[g] for g in genotype_ids]
+        g = rng.choices(genotype_ids, weights=weights, k=1)[0]
+        series.append(rng.choice(series_by_genotype[g]))
+        idents.append(identities[g])
+    return series, idents
+
+
+def series_to_word_set(series: str, vocab) -> frozenset:
+    """The SET of vocab-restricted 3-grams in one participant's series
+    string -- mirrors build_edges's own per-participant parsing exactly
+    (split on ',', strip, rstrip('。'), vocab filter). Used only for the
+    diversity metrics below; build_edges itself stays untouched (ported
+    verbatim from the human-study reference, see markov_recovery.py)."""
+    if not series:
+        return frozenset()
+    return frozenset(n for n in (x.strip().rstrip("。") for x in series.split(",")) if n in vocab)
+
+
+def group_diversity_metrics(
+    series_list: Sequence[str], idents_list: Sequence[Tuple[int, str, str]], vocab,
+) -> Dict[str, float]:
+    """n_distinct_genotypes: how many distinct genotype identities are in
+    this virtual group. mean_pairwise_jaccard_distance: mean, over every
+    pair of members, of 1 - Jaccard(their 3-gram sets) -- design doc
+    2026-10-16's "群の中の多様さの指標" (how much individual variation a
+    sampling scheme's groups contain -- scheme (A) is expected to be
+    lower-diversity than (B), since selection has already converged a
+    single seed's population toward few genotypes)."""
+    n = len(series_list)
+    n_distinct_genotypes = len(set(idents_list))
+    word_sets = [series_to_word_set(s, vocab) for s in series_list]
+    distances = []
+    for i in range(n):
+        for j in range(i + 1, n):
+            a, b = word_sets[i], word_sets[j]
+            union = a | b
+            jacc = len(a & b) / len(union) if union else 1.0  # both empty -> identical, distance 0
+            distances.append(1 - jacc)
+    return {
+        "n_distinct_genotypes": n_distinct_genotypes,
+        "mean_pairwise_jaccard_distance": sum(distances) / len(distances) if distances else 0.0,
+    }
+
+
 def network_metrics(edges: Dict[Tuple[str, str], float], opponent: str) -> dict:
     """One bootstrap network's metrics: widest-path recovery (底底底->和和和)
     and descent (和和和->底底底), Table 7 j* for each of the opponent's
@@ -168,6 +266,52 @@ def similarity_to_human(
     return corr, jacc
 
 
+def _accumulate_bootstrap_metrics(
+    sums: Dict[str, float],
+    counts: Dict[str, int],
+    edges: Dict[Tuple[str, str], float],
+    opponent: str,
+    human_weights_by_group: Dict[str, Dict[Tuple[str, str], float]],
+) -> Tuple[bool, bool]:
+    """One bootstrap draw's network_metrics/similarity_to_human contribution
+    to the running sums/counts (shared by bootstrap_aggregate and
+    bootstrap_aggregate_with_sampler). Returns (has_bottom3, has_top3)."""
+    m = network_metrics(edges, opponent)
+    for key in ("recovery", "descent"):
+        if m[key] is not None:
+            sums[key] += m[key]
+            counts[key] += 1
+    sums["largest_scc_at_40"] += m["largest_scc_at_40"]
+    counts["largest_scc_at_40"] += 1
+    for ci, v in m["jstars"].items():
+        sums[f"jstar_{ci}"] += v
+        counts[f"jstar_{ci}"] += 1
+    for group_name, hw in human_weights_by_group.items():
+        corr, jacc = similarity_to_human(edges, hw)
+        if corr is not None:
+            sums[f"corr_{group_name}"] += corr
+            counts[f"corr_{group_name}"] += 1
+        if jacc is not None:
+            sums[f"jaccard_{group_name}"] += jacc
+            counts[f"jaccard_{group_name}"] += 1
+    return m["has_bottom3"], m["has_top3"]
+
+
+def _finalize_bootstrap_summary(
+    sums: Dict[str, float], counts: Dict[str, int], n_bottom3: int, n_top3: int, n_boot: int,
+) -> Dict[str, float]:
+    out: Dict[str, float] = {
+        "n_boot": n_boot,
+        "rate_bottom3_present": n_bottom3 / n_boot,
+        "rate_top3_present": n_top3 / n_boot,
+        "rate_recovery_undefined": 1 - counts["recovery"] / n_boot,
+        "rate_descent_undefined": 1 - counts["descent"] / n_boot,
+    }
+    for key, total in sums.items():
+        out[f"mean_{key}"] = total / counts[key] if counts[key] else float("nan")
+    return out
+
+
 def bootstrap_aggregate(
     frequencies: Dict[int, int],
     series_by_genotype: Dict[int, List[str]],
@@ -181,8 +325,7 @@ def bootstrap_aggregate(
     means (over the bootstraps where the metric was defined) plus the
     rate at which 底底底/和和和 were absent or the widest path was
     undefined (None) -- design doc section 3.3's reporting requirement."""
-    vocab_name = OPPONENT_INFO[opponent][1]
-    vocab = load_vocab(vocab_name)
+    vocab = load_vocab(OPPONENT_INFO[opponent][1])
 
     sums: Dict[str, float] = defaultdict(float)
     counts: Dict[str, int] = defaultdict(int)
@@ -191,34 +334,44 @@ def bootstrap_aggregate(
     for _ in range(n_boot):
         group = resample_virtual_group(frequencies, series_by_genotype, group_size, rng)
         edges = build_edges(group, vocab)
-        m = network_metrics(edges, opponent)
-        n_bottom3 += m["has_bottom3"]
-        n_top3 += m["has_top3"]
-        for key in ("recovery", "descent"):
-            if m[key] is not None:
-                sums[key] += m[key]
-                counts[key] += 1
-        sums["largest_scc_at_40"] += m["largest_scc_at_40"]
-        counts["largest_scc_at_40"] += 1
-        for ci, v in m["jstars"].items():
-            sums[f"jstar_{ci}"] += v
-            counts[f"jstar_{ci}"] += 1
-        for group_name, hw in human_weights_by_group.items():
-            corr, jacc = similarity_to_human(edges, hw)
-            if corr is not None:
-                sums[f"corr_{group_name}"] += corr
-                counts[f"corr_{group_name}"] += 1
-            if jacc is not None:
-                sums[f"jaccard_{group_name}"] += jacc
-                counts[f"jaccard_{group_name}"] += 1
+        has_bottom3, has_top3 = _accumulate_bootstrap_metrics(sums, counts, edges, opponent, human_weights_by_group)
+        n_bottom3 += has_bottom3
+        n_top3 += has_top3
 
-    out: Dict[str, float] = {
-        "n_boot": n_boot,
-        "rate_bottom3_present": n_bottom3 / n_boot,
-        "rate_top3_present": n_top3 / n_boot,
-        "rate_recovery_undefined": 1 - counts["recovery"] / n_boot,
-        "rate_descent_undefined": 1 - counts["descent"] / n_boot,
-    }
-    for key, total in sums.items():
-        out[f"mean_{key}"] = total / counts[key] if counts[key] else float("nan")
-    return out
+    return _finalize_bootstrap_summary(sums, counts, n_bottom3, n_top3, n_boot)
+
+
+def bootstrap_aggregate_with_sampler(
+    sample_fn,
+    opponent: str,
+    n_boot: int,
+    rng: random.Random,
+    human_weights_by_group: Dict[str, Dict[Tuple[str, str], float]],
+    vocab,
+    with_diversity: bool = False,
+) -> Dict[str, float]:
+    """Like bootstrap_aggregate, but draws each bootstrap's virtual group
+    via an arbitrary `sample_fn(rng) -> (series_list, idents_list)`
+    instead of the fixed within-seed resample_virtual_group -- lets the
+    same metrics machinery run over resample_cross_seed_group too
+    (design doc 2026-10-16, comparing sampling schemes (A)/(B)). If
+    with_diversity, also aggregates group_diversity_metrics
+    (mean_n_distinct_genotypes, mean_mean_pairwise_jaccard_distance)."""
+    sums: Dict[str, float] = defaultdict(float)
+    counts: Dict[str, int] = defaultdict(int)
+    n_bottom3 = n_top3 = 0
+
+    for _ in range(n_boot):
+        series_list, idents_list = sample_fn(rng)
+        edges = build_edges(series_list, vocab)
+        has_bottom3, has_top3 = _accumulate_bootstrap_metrics(sums, counts, edges, opponent, human_weights_by_group)
+        n_bottom3 += has_bottom3
+        n_top3 += has_top3
+        if with_diversity:
+            div = group_diversity_metrics(series_list, idents_list, vocab)
+            sums["n_distinct_genotypes"] += div["n_distinct_genotypes"]
+            counts["n_distinct_genotypes"] += 1
+            sums["mean_pairwise_jaccard_distance"] += div["mean_pairwise_jaccard_distance"]
+            counts["mean_pairwise_jaccard_distance"] += 1
+
+    return _finalize_bootstrap_summary(sums, counts, n_bottom3, n_top3, n_boot)

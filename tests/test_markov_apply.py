@@ -4,11 +4,17 @@ import random
 
 from evopersonality_abm.markov_apply import (
     bootstrap_aggregate,
+    bootstrap_aggregate_with_sampler,
+    group_diversity_metrics,
     load_census,
+    load_genotype_identities,
     load_human_weights,
     load_series_by_genotype_all_opponents,
     network_metrics,
+    resample_cross_seed_group,
     resample_virtual_group,
+    resample_within_seed_group_with_identity,
+    series_to_word_set,
     similarity_to_human,
 )
 from evopersonality_abm.markov_recovery import build_edges, load_vocab, series_from_moves
@@ -197,3 +203,153 @@ def test_bootstrap_aggregate_single_genotype_is_deterministic_across_boots():
     assert result["rate_bottom3_present"] in (0.0, 1.0)
     assert result["rate_top3_present"] == 0.0  # AllC/AllD vocab never contains 和和和
     assert 0.0 <= result["rate_recovery_undefined"] <= 1.0
+
+
+# ------------------------------------------------------------------ load_genotype_identities
+
+def test_load_genotype_identities(tmp_path):
+    path = tmp_path / "census.csv.gz"
+    with gzip.open(path, "wt", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["genotype_id", "memory_depth", "frequency", "table", "prehistory"])
+        w.writerow([0, 1, 7, "0,1,0,1", "1,1"])
+        w.writerow([1, 1, 3, "0,0,0,0", "0,0"])
+    idents = load_genotype_identities(path)
+    assert idents == {0: (1, "0,1,0,1", "1,1"), 1: (1, "0,0,0,0", "0,0")}
+
+
+# ------------------------------------------------------------------ resample_within_seed_group_with_identity
+
+def test_resample_within_seed_group_with_identity_pairs_series_and_identity():
+    frequencies = {0: 10, 1: 0}
+    series_by_genotype = {0: ["s0"], 1: ["s1"]}
+    identities = {0: (1, "t0", "p0"), 1: (1, "t1", "p1")}
+    series, idents = resample_within_seed_group_with_identity(
+        frequencies, series_by_genotype, identities, group_size=20, rng=random.Random(0)
+    )
+    assert len(series) == len(idents) == 20
+    assert all(s == "s0" for s in series)  # genotype 1 has zero weight
+    assert all(i == (1, "t0", "p0") for i in idents)
+
+
+# ------------------------------------------------------------------ resample_cross_seed_group
+
+def _seed_pool(genotype_id, series, identity, frequency=1):
+    return ({genotype_id: frequency}, {genotype_id: [series]}, {genotype_id: identity})
+
+
+def test_resample_cross_seed_group_draws_one_distinct_seed_each():
+    seed_pools = {
+        s: _seed_pool(0, f"series_{s}", (1, f"table_{s}", "p"))
+        for s in range(5)
+    }
+    series, idents = resample_cross_seed_group(seed_pools, group_size=5, rng=random.Random(0))
+    assert len(series) == 5
+    # every seed contributes exactly one member (distinct seeds, group_size == n_seeds)
+    assert sorted(series) == [f"series_{s}" for s in range(5)]
+    assert len(set(idents)) == 5  # each seed's genotype table differs, so 5 distinct identities
+
+
+def test_resample_cross_seed_group_raises_when_group_size_exceeds_available_seeds():
+    seed_pools = {s: _seed_pool(0, f"series_{s}", (1, "t", "p")) for s in range(3)}
+    try:
+        resample_cross_seed_group(seed_pools, group_size=5, rng=random.Random(0))
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
+
+
+def test_resample_cross_seed_group_is_deterministic_given_same_rng_seed():
+    seed_pools = {s: _seed_pool(0, f"series_{s}", (1, f"t{s}", "p")) for s in range(5)}
+    out1 = resample_cross_seed_group(seed_pools, group_size=3, rng=random.Random(7))
+    out2 = resample_cross_seed_group(seed_pools, group_size=3, rng=random.Random(7))
+    assert out1 == out2
+
+
+# ------------------------------------------------------------------ series_to_word_set / group_diversity_metrics
+
+def test_series_to_word_set_matches_build_edges_per_participant_parsing():
+    vocab = load_vocab("AllD")
+    focal = ["D"] * 20
+    opp = ["D"] * 20
+    series = series_from_moves(focal, opp, n_rounds=20)
+    word_set = series_to_word_set(series, vocab)
+    assert word_set == {"底底底"}  # all-DD-throughout has only one 3-gram
+
+
+def test_series_to_word_set_empty_series_is_empty_set():
+    assert series_to_word_set("", load_vocab("TFT")) == frozenset()
+
+
+def test_group_diversity_metrics_identical_members_have_zero_diversity():
+    vocab = load_vocab("AllD")
+    series = series_from_moves(["D"] * 20, ["D"] * 20, n_rounds=20)
+    series_list = [series] * 4
+    idents_list = [(1, "t", "p")] * 4
+    result = group_diversity_metrics(series_list, idents_list, vocab)
+    assert result["n_distinct_genotypes"] == 1
+    assert result["mean_pairwise_jaccard_distance"] == 0.0
+
+
+def test_group_diversity_metrics_all_distinct_members_have_higher_diversity():
+    vocab = load_vocab("AllD")
+    same = group_diversity_metrics(
+        [series_from_moves(["D"] * 20, ["D"] * 20, n_rounds=20)] * 4,
+        [(1, "t", "p")] * 4, vocab,
+    )
+    different_series = [
+        series_from_moves(["D"] * 20, ["D"] * 20, n_rounds=20),          # all-D
+        series_from_moves(["C"] * 20, ["D"] * 20, n_rounds=20),          # all-C vs D
+        series_from_moves(["D", "C"] * 10, ["D"] * 20, n_rounds=20),
+        series_from_moves(["C", "D"] * 10, ["D"] * 20, n_rounds=20),
+    ]
+    different = group_diversity_metrics(different_series, [(1, f"t{i}", "p") for i in range(4)], vocab)
+    assert different["n_distinct_genotypes"] == 4
+    assert different["mean_pairwise_jaccard_distance"] > same["mean_pairwise_jaccard_distance"]
+
+
+# ------------------------------------------------------------------ bootstrap_aggregate_with_sampler
+
+def test_bootstrap_aggregate_with_sampler_matches_bootstrap_aggregate_for_an_equivalent_sampler():
+    # sample_fn wrapping resample_virtual_group (ignoring identities) must
+    # reproduce bootstrap_aggregate's own numbers bit-for-bit, given the
+    # same rng draw sequence.
+    focal = ["C", "D"] * 10
+    opp = ["D", "C"] * 10
+    series = series_from_moves(focal, opp, n_rounds=20)
+    frequencies = {0: 3, 1: 1}
+    series_by_genotype = {0: [series], 1: [series_from_moves(["D"] * 20, ["D"] * 20, n_rounds=20)]}
+    human_weights = {"Secure": {}, "Mix": {}, "Fearful": {}}
+    vocab = load_vocab("TFT")
+
+    direct = bootstrap_aggregate(
+        frequencies, series_by_genotype, "TFT", group_size=4, n_boot=20,
+        rng=random.Random(5), human_weights_by_group=human_weights,
+    )
+
+    def sample_fn(rng):
+        return resample_virtual_group(frequencies, series_by_genotype, 4, rng), None
+
+    via_sampler = bootstrap_aggregate_with_sampler(
+        sample_fn, "TFT", n_boot=20, rng=random.Random(5),
+        human_weights_by_group=human_weights, vocab=vocab, with_diversity=False,
+    )
+    assert direct == via_sampler
+
+
+def test_bootstrap_aggregate_with_sampler_with_diversity_adds_diversity_keys():
+    vocab = load_vocab("AllD")
+    series = series_from_moves(["D"] * 20, ["D"] * 20, n_rounds=20)
+    seed_pools = {s: _seed_pool(0, series, (1, f"t{s}", "p")) for s in range(5)}
+
+    def sample_fn(rng):
+        return resample_cross_seed_group(seed_pools, group_size=5, rng=rng)
+
+    result = bootstrap_aggregate_with_sampler(
+        sample_fn, "AllD", n_boot=5, rng=random.Random(1),
+        human_weights_by_group={"Secure": {}, "Mix": {}, "Fearful": {}}, vocab=vocab,
+        with_diversity=True,
+    )
+    assert "mean_n_distinct_genotypes" in result
+    assert "mean_mean_pairwise_jaccard_distance" in result
+    assert result["mean_n_distinct_genotypes"] == 5  # every seed_pool has a distinct identity
