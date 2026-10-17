@@ -129,6 +129,22 @@ rounds_per_duel=50、ノイズなし)では、5シードのうち2シードだ�
 `scripts/output/figures/markov_sweep_pilot_summary.png`(両条件・各seedの
 mean payoff・mean memory depthの世代推移)。
 
+**抽出方式の追加検討(2026-10-17)**: パイロットの網分析結果を見て、仮想参加者の
+群の作り方を2通り比較することにした — (A)集団内抽出(1 seedの集団から頻度比例で
+n体抽出、既存方式)と(B)系統間抽出(別々のseedから1体ずつ、各seed内では頻度比例、
+新規)。理由: Jaccardは群内の個体差の大きさに強く依存し、(A)は選択で収束した
+集団から同じ遺伝子型のコピーが多数選ばれうるため、人との比較に適さない可能性が
+ある。パイロット(n=10、10 seed全部を使う)で両方を試した結果
+(`scripts/analyze_markov_sweep_pilot_sampling_comparison.py`、
+`scripts/output/markov_sweep_pilot_sampling_comparison.csv`、相手ごとの比較図
+`scripts/output/figures/markov_sweep_pilot_sampling_comparison_*.png`):
+(B)は(A)より群内の遺伝子型多様性(n_distinct_genotypes・3-gram集合の平均Jaccard
+距離)が明確に高く、人の3群との相関もほとんどのプローブ時点で(A)より高い
+(TFT・AllDで特に顕著)。(A)の群内重複が人との比較可能性を下げていた、という
+仮説と整合する結果。本番計画をこれに合わせて変更(seed数70・seed番号100〜169・
+世代数3000、`docs/MARKOV_STRUCTURE_EVOLUTION_MAC_RUNBOOK.md`に反映済み)。
+本番実行・事前登録は、この結果の確認後に着手する。
+
 ### 1.5 計算量の実測
 
 このクラウド環境で実測(`population.run_evolution(population_size=100,
