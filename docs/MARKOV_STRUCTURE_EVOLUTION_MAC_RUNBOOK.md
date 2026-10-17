@@ -1,8 +1,8 @@
-# Markov構造進化・本番ラン(50 seed×5000世代×2条件)をMacで実行する
+# Markov構造進化・本番ラン(70 seed×3000世代×2条件)をMacで実行する
 
 パイロット(10 seed×2000世代、両ノイズ条件)はクラウド環境で完走・分析済み
 (`docs/MARKOV_STRUCTURE_EVOLUTION_DESIGN.md` 1.4節・`scripts/output/figures/markov_sweep_pilot_summary.png`)。
-本番は規模が大きく(1条件あたり約50シード×5000世代+プローブ、計算量の見積もりは
+本番は規模が大きく(1条件あたり約70シード×3000世代+プローブ、計算量の見積もりは
 下記2節)、クラウド環境の2時間バックグラウンド上限を何十回も再開するより、
 ユーザー自身のMacで`nohup`実行する方が実際的。このファイルはそのための手順書
 (`docs/SCENT_MODEL_N1000_PHASE_ANIMATION.md`・`docs/LOCAL_RUN.md`と同じ形式)。
@@ -10,6 +10,12 @@
 対象ブランチ: `claude/lindgren-population-evolution-08fat1`
 対象リポジトリ: `dpforest610/EvoPersonality_ABM`
 対象スクリプト: `scripts/run_lindgren_markov_sweep.py`
+
+**2026-10-17改訂**: 本番計画を変更(パイロットでの切り替え頻度の結果を受けて)。
+世代数は5000→**3000**(2000世代以内に十分な切り替えが観測されたため)。seed数は
+50→**70**(系統間抽出[仮想参加者の群を、別々のseedから1体ずつ作る新しい抽出方式]
+で、人の最大の群である69人を、別々のseedから作れるようにするため)。seed番号は
+パイロット(0〜9)と重ならないよう**100〜169**を使う。
 
 ---
 
@@ -23,8 +29,9 @@
 共通パラメータ(パイロットと同じ、design doc 1.3/2.1/2.4節で確定済み):
 population_size=100, rounds_per_duel=50, point_mutation_rate=0.05,
 duplication_rate=0.02, split_rate=0.02, max_memory_depth=6,
-probe_interval=50, probe_repeats=30, probe_rounds=100, main_analysis_rounds=20,
-seeds=50, generations=5000。
+probe_interval=50, probe_repeats=30, probe_rounds=100, main_analysis_rounds=20。
+
+**2026-10-17改訂**: seeds=70(seed番号100〜169)、generations=3000。
 
 ---
 
@@ -76,18 +83,22 @@ time python3 scripts/run_lindgren_markov_sweep.py \
 ## 2. 計算量の見積もり
 
 パイロット(10 seed×2000世代)の実測から外挿: 1シードあたり評価段(evolution)が
-約103分(1.24秒/世代×5000)、プローブ段が約5〜10分(世代が進むほど遺伝子型の
-ユニーク数が減るので上限寄りの見積もり)、**合計1シードあたり約110分(1.8時間)**。
+約62分(1.24秒/世代×3000)、プローブ段が約5分(世代数が5000→3000になった分、
+プローブ回数が101→61時点に減るので、以前の見積もり[約7〜10分]から比例縮小)、
+**合計1シードあたり約67分(約1.12時間)**。
 
-50シード×2条件=100ユニット。単純直列なら約180時間(7.5日)。ワーカー数`W`
-(1条件あたり)で並列化した場合、1条件の壁時計時間は約 `ceil(50/W) × 1.8時間`。
+70シード×2条件=140ユニット。単純直列なら約156時間(6.5日)。ワーカー数`W`
+(1条件あたり)で並列化した場合、1条件の壁時計時間は約 `ceil(70/W) × 1.12時間`。
 両条件を同時に(別々の`nohup`行で)走らせる前提なら、**2条件分のワーカー数の
 合計がコア数を超えないこと**(3節で確認)。
 
 例: 8コアのMacで両条件を同時に走らせる場合、`--workers 3`を2行(合計6、2コアは
-OS・他作業用に残す)なら、1条件あたり `ceil(50/3)=17` チャンク×1.8時間
-**≈ 31時間/条件**(2条件同時なので合計の壁時計時間もほぼ31時間)。`--workers 4`
-を2行(合計8、残り無し)なら `ceil(50/4)=13` ×1.8時間 **≈ 23時間/条件**。
+OS・他作業用に残す)なら、1条件あたり `ceil(70/3)=24` チャンク×1.12時間
+**≈ 27時間/条件**(2条件同時なので合計の壁時計時間もほぼ27時間)。`--workers 4`
+を2行(合計8、残り無し)なら `ceil(70/4)=18` ×1.12時間 **≈ 20時間/条件**。
+
+(1-3節の実測で、このMacでの実際の1世代あたりの秒数を確認してから、上の見積もりを
+スケールし直すこと。)
 
 ---
 
@@ -110,17 +121,19 @@ sysctl -n hw.ncpu
 ```bash
 mkdir -p logs
 nohup caffeinate -dimsu python3 scripts/run_lindgren_markov_sweep.py \
-  --seeds 50 --generations 5000 --noise-rate 0.01 --workers 3 --push \
+  --seeds 70 --seed-offset 100 --generations 3000 --noise-rate 0.01 --workers 3 --push \
   --out-dir scripts/output/markov_sweep_production_noise01 \
   > logs/markov_sweep_noise01.log 2>&1 &
 disown
 
 nohup caffeinate -dimsu python3 scripts/run_lindgren_markov_sweep.py \
-  --seeds 50 --generations 5000 --noise-rate 0.0 --workers 3 --push \
+  --seeds 70 --seed-offset 100 --generations 3000 --noise-rate 0.0 --workers 3 --push \
   --out-dir scripts/output/markov_sweep_production_noise00 \
   > logs/markov_sweep_noise00.log 2>&1 &
 disown
 ```
+
+(`--seed-offset 100`でseed番号100〜169を使う — パイロットのseed 0〜9と重複しない。)
 
 (`--workers 3`は8コア・2条件同時の例。3-1で決めた数に置き換える。`caffeinate -dimsu`
 でディスプレイ・システムスリープを防止 — ノートPCの蓋を閉じるとそれでも止まる場合が
@@ -141,17 +154,17 @@ disown
 ### 4-1. 進捗を一目で見る
 
 ```bash
-python3 scripts/check_markov_sweep_progress.py --n-seeds 50 --generations 5000
+python3 scripts/check_markov_sweep_progress.py --n-seeds 70 --seed-offset 100 --generations 3000
 ```
 
 出力例:
 
 ```
                                condition      done  in-progress (seed:age/total)
-scripts/output/markov_sweep_production_noise01    3/50    3:1450/5000, 4:200/5000, 5:50/5000
-scripts/output/markov_sweep_production_noise00    2/50    2:900/5000
+scripts/output/markov_sweep_production_noise01    3/70    103:1450/3000, 104:200/3000, 105:50/3000
+scripts/output/markov_sweep_production_noise00    2/70    102:900/3000
 
-Total: 5/100 (condition, seed) units complete.
+Total: 5/140 (condition, seed) units complete.
 ```
 
 ### 4-2. プロセスが生きているか
@@ -191,7 +204,7 @@ pkill -f run_lindgren_markov_sweep.py
 `M`が0より大きければチェックポイントから再開されていることが分かる。念のため:
 
 ```bash
-python3 scripts/check_markov_sweep_progress.py --n-seeds 50 --generations 5000
+python3 scripts/check_markov_sweep_progress.py --n-seeds 70 --seed-offset 100 --generations 3000
 ```
 
 で、in-progressの世代数が停止前より後退していないことを確認する。
@@ -206,10 +219,10 @@ python3 scripts/check_markov_sweep_progress.py --n-seeds 50 --generations 5000
 ### 6-1. 完了ユニットの確認
 
 ```bash
-python3 scripts/check_markov_sweep_progress.py --n-seeds 50 --generations 5000
+python3 scripts/check_markov_sweep_progress.py --n-seeds 70 --seed-offset 100 --generations 3000
 ```
 
-`Total: 100/100`になったら完走。
+`Total: 140/140`になったら完走。
 
 ### 6-2. 手元から見て、押し漏れがないか確認
 
@@ -229,17 +242,18 @@ git push
 
 (未完了シードの`.pkl`チェックポイントと、`_census.csv.gz`/`_moves.csv.gz`は
 `.gitignore`対象なので、これに含まれない — raw move dataはローカルディスクに
-残る。本番データ量は1条件あたり数十GB程度になる見込み[パイロットの比例外挿
-— パイロットが約1.4GB/670MBだったのに対し、本番はシード数2.5倍・世代数2.5倍
-でおよそ6倍]。ディスク容量に注意。)
+残る。本番データ量はパイロットの比例外挿(パイロットが約1.4GB/670MB、シード数
+7倍・プローブ時点数約1.49倍でおよそ10.4倍)で、**noise_rate=0.01が約15GB、
+noise_rate=0.0が約7GB、合計約22GB**になる見込み。ディスク容量に注意。)
 
 ### 6-3. その後
 
-完走後は、`scripts/analyze_markov_sweep_pilot_network.py`と同じ枠組み
-(ただしパイロット用スクリプトなので、本番の出力先・seeds=50・generations=5000に
-合わせてパラメータを変えて再実行するか、本番用に複製・調整したスクリプトを使う)
-で、design doc 3.3/7.2節のマルコフ網分析一式を本番データにかける。これは別途
-依頼を受けてから着手する。
+完走後は、`scripts/analyze_markov_sweep_pilot_network.py`・
+`scripts/analyze_markov_sweep_pilot_sampling_comparison.py`と同じ枠組み
+(ただしパイロット用スクリプトなので、本番の出力先・seeds=70・seed-offset=100・
+generations=3000に合わせてパラメータを変えて再実行するか、本番用に複製・調整した
+スクリプトを使う)で、design doc 3.3/7.2節のマルコフ網分析一式(抽出方式(A)/(B)
+両方)を本番データにかける。これは別途依頼を受けてから着手する。
 
 ---
 

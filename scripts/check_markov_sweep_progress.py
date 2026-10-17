@@ -5,7 +5,7 @@ and the Mac runbook (docs/MARKOV_STRUCTURE_EVOLUTION_MAC_RUNBOOK.md).
 
 Usage:
     python3 scripts/check_markov_sweep_progress.py
-    python3 scripts/check_markov_sweep_progress.py --n-seeds 50 --generations 5000 \\
+    python3 scripts/check_markov_sweep_progress.py --n-seeds 70 --seed-offset 100 --generations 3000 \\
         --out-dirs scripts/output/markov_sweep_production_noise01,scripts/output/markov_sweep_production_noise00
 """
 
@@ -28,12 +28,13 @@ DEFAULT_OUT_DIRS = [
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--out-dirs", type=str, default=",".join(DEFAULT_OUT_DIRS))
-    p.add_argument("--n-seeds", type=int, default=50)
-    p.add_argument("--generations", type=int, default=5000)
+    p.add_argument("--n-seeds", type=int, default=70)
+    p.add_argument("--seed-offset", type=int, default=100)
+    p.add_argument("--generations", type=int, default=3000)
     args = p.parse_args()
 
     out_dirs = [Path(d) for d in args.out_dirs.split(",") if d.strip()]
-    seeds = list(range(args.n_seeds))
+    seeds = list(range(args.seed_offset, args.seed_offset + args.n_seeds))
 
     print(f"{'condition':>40}  {'done':>8}  in-progress (seed:age/total)")
     total_done, total_units = 0, 0
