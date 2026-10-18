@@ -23,3 +23,4 @@ scripts/output/**/*_checkpoint.pkl.tmp
 scripts/output/**/*_probe_age_*_census.csv.gz
 scripts/output/**/*_probe_age_*_moves.csv.gz
 scripts/output/markov_sweep_pilot_smoke/
+scripts/output/**/_age_cache_*/

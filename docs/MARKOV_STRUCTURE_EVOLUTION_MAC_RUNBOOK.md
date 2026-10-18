@@ -272,3 +272,169 @@ generations=5000に合わせてパラメータを変えて再実行するか、�
 | `git push`が`rejected` | `git pull --rebase`してから再度`git push`。コンフリクトが出た場合、`scripts/output/`以下のCSVはこちらが勝って問題ないことが多いが、判断に迷ったら触らずに相談する |
 | Macがスリープして止まっていた | `caffeinate`を付け忘れていないか確認。5-2の手順で再開すれば、チェックポイントからの再開で済む(最大50世代分の損失) |
 | 蓋を閉じたら止まっていた | システム設定で「電源アダプタ接続時は蓋を閉じてもスリープしない」を有効にする。再開は5-2と同じ |
+
+---
+
+## 8. 確証的分析の実行(事前登録4〜6節)
+
+**対象ブランチ: `claude/markov-production-analysis`(`claude/lindgren-population-evolution-08fat1`とは別)。**
+生の対戦記録(raw moves、計数十GB)はMacにしかないので、このスクリプトもMacで
+実行するが、**感度分析(ノイズ0.0)がまだ走っている元のclone・作業ディレクトリは
+触らない** — 別のcloneを作り、raw probe dataだけシンボリックリンクで共有する。
+
+### 8-1. 別cloneのセットアップ
+
+既存のclone(以下「本番clone」、1節でcheckoutした`claude/lindgren-population-evolution-08fat1`の
+ディレクトリ)はそのままにして、隣に新しいcloneを作る:
+
+```bash
+cd ..   # EvoPersonality_ABM/ の一つ上
+git clone https://github.com/dpforest610/EvoPersonality_ABM.git EvoPersonality_ABM_confirmatory
+cd EvoPersonality_ABM_confirmatory
+git checkout claude/markov-production-analysis
+python3 -m venv venv
+source venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
+python3 -m pytest -q
+```
+
+全件passedになることを確認(1件でもfailしたら進まずまず報告して)。
+
+### 8-2. raw probe dataをシンボリックリンク
+
+新しいcloneには(`.gitignore`対象の)raw `.csv.gz`が無いので、本番cloneの
+出力ディレクトリをリンクする(パスは実際の本番cloneの場所に合わせて調整):
+
+```bash
+mkdir -p scripts/output
+ln -s ../../EvoPersonality_ABM/scripts/output/markov_sweep_production_noise01 scripts/output/markov_sweep_production_noise01
+ln -s ../../EvoPersonality_ABM/scripts/output/markov_sweep_production_noise00 scripts/output/markov_sweep_production_noise00
+ls scripts/output/markov_sweep_production_noise01 | head   # リンクが機能しているか確認
+```
+
+### 8-3. 実行コマンド
+
+デフォルト値はすべて事前登録(4〜5節)に合わせてあるので、追加で指定する
+フラグは最小限で済む。**主条件(ノイズ0.01、`run_lindgren_markov_sweep.py`が
+評価段と同時にプローブしているので既に完了している)を先に実行**し、
+感度分析(ノイズ0.0)は該当の評価データが`70/70`完了してから実行する(4節の
+`check_markov_sweep_progress.py`で確認)。
+
+```bash
+mkdir -p logs
+nohup caffeinate -dimsu venv/bin/python scripts/run_markov_confirmatory_analysis.py \
+  --data-dir scripts/output/markov_sweep_production_noise01 \
+  --moves-suffix noise0p01 \
+  --role primary \
+  --results-dir scripts/output/markov_confirmatory_production_noise01 \
+  > logs/markov_confirmatory_primary.log 2>&1 &
+disown
+```
+
+主条件が終わったら(ログ末尾に`all ages done in ...s`が出る):
+
+```bash
+nohup caffeinate -dimsu venv/bin/python scripts/run_markov_confirmatory_analysis.py \
+  --data-dir scripts/output/markov_sweep_production_noise00 \
+  --moves-suffix noise0 \
+  --role sensitivity \
+  --results-dir scripts/output/markov_confirmatory_production_noise00 \
+  > logs/markov_confirmatory_sensitivity.log 2>&1 &
+disown
+```
+
+(`--moves-suffix`は評価ノイズではなく**プローブ時のノイズ**を指す
+ファイル名の一部 — `run_lindgren_markov_sweep.py`は常に両方のプローブノイズ
+[0.0と評価ノイズ]でプローブしているが、事前登録どおり主条件は
+「評価ノイズ0.01下で進化した個体をノイズ0.01でプローブ」、感度分析は
+「評価ノイズ0.0下で進化した個体をノイズ0.0でプローブ」を使うため、
+`markov_sweep_production_noise01/`では`noise0p01`、`markov_sweep_production_noise00/`
+では`noise0`を指定する。)
+
+### 8-4. 実行時間・メモリの見積もり
+
+81プローブ時点(gen 1000〜5000、50世代おき)×1世代あたりの処理。ベンチマーク
+(パイロット規模のseed・group_sizeで実測した計算コストと、本番group_size=56での
+実測ブートストラップ1回あたりコスト[TFT約0.48ms、AllD約0.31ms、AllC約0.34ms、
+Random約2.46ms、Gradual約1.09ms]を合成)から:
+
+- 計算(CPU): 1時点あたり約70秒
+- I/O(70 seed分のraw `.csv.gz`読み込み): 1時点あたり約87.5秒
+- 合計 約158秒/時点 × 81時点 ÷ `--workers 5`(デフォルト) ≈ **約43分/条件**
+- 両条件(主・感度分析)合計で **約1.5時間**(逐次実行時。同時に2つ走らせると
+  I/O競合でこれより遅くなる可能性があるので、逐次実行を推奨)
+- メモリ: 1時点あたりraw probe dataをseedごとに読んで集計後に解放するため
+  **1GB未満**(ピークはプロセス数`--workers 5`×1プロセスあたり数百MB程度)
+
+本番前に、小規模(数時点だけ)で実測してから見積もりを更新したい場合:
+
+```bash
+time venv/bin/python scripts/run_markov_confirmatory_analysis.py \
+  --data-dir scripts/output/markov_sweep_production_noise01 \
+  --moves-suffix noise0p01 --role primary --window-start 1000 --window-end 1100 \
+  --results-dir /tmp/markov_confirmatory_timing_check
+```
+(`window-end 1100`で3時点[1000,1050,1100]だけ処理。終わったら
+`rm -rf /tmp/markov_confirmatory_timing_check`。)
+
+### 8-5. 進捗・再開
+
+時点(age)ごとに`<results-dir>/_age_cache_<role>/age_<N>.pkl`へ結果をキャッシュする
+(`.gitignore`対象 — pushに含まれない)。`pkill`や停電で止まっても、同じコマンドを
+もう一度打てば、キャッシュ済みの時点は再計算せずスキップして再開する。
+
+```bash
+ps aux | grep run_markov_confirmatory_analysis | grep -v grep   # 生きているか確認
+tail -40 logs/markov_confirmatory_primary.log                    # 進捗ログ
+ls scripts/output/markov_confirmatory_production_noise01/_age_cache_primary/ | wc -l   # 完了済み時点数(81で全完了)
+```
+
+### 8-6. 付随する図・分析スクリプト
+
+生のraw probe dataは不要(8-3の記述的CSVだけ読む)なので、Mac以外(このクラウド
+セッションなど)でも、CSVを転送すれば実行できる。各役割(primary/sensitivity)ごとに:
+
+```bash
+venv/bin/python scripts/plot_markov_confirmatory_trends.py \
+  --descriptive-csv scripts/output/markov_confirmatory_production_noise01/markov_confirmatory_descriptive_primary.csv \
+  --role primary --out-dir scripts/output/figures
+
+venv/bin/python scripts/plot_markov_confirmatory_sampling_comparison.py \
+  --descriptive-csv scripts/output/markov_confirmatory_production_noise01/markov_confirmatory_descriptive_primary.csv \
+  --role primary --out-dir scripts/output/figures
+
+venv/bin/python scripts/analyze_markov_confirmatory_regime_correspondence.py \
+  --generation-stats-dir scripts/output/markov_sweep_production_noise01 \
+  --descriptive-csv scripts/output/markov_confirmatory_production_noise01/markov_confirmatory_descriptive_primary.csv \
+  --role primary --out-dir scripts/output/figures
+```
+
+(`--role sensitivity`の場合は`noise01`→`noise00`、`primary`→`sensitivity`に
+読み替える。`analyze_markov_confirmatory_regime_correspondence.py`は`generation_stats.csv`
+[各seedの評価段の統計、軽量で既にpush済み]を読むので、`--generation-stats-dir`は
+対応する評価データのディレクトリを指定する。)
+
+### 8-7. 結果のpush — 必ず新しいブランチへ
+
+**`claude/markov-production-analysis`ブランチにのみpushする。
+`claude/lindgren-population-evolution-08fat1`には絶対にpushしない**
+(感度分析の進化ランがそちらで進行中のため)。
+
+```bash
+git branch --show-current   # claude/markov-production-analysis であることを確認してからpush
+git status --short           # _age_cache_*/ やraw .csv.gz(symlink先)が含まれていないか確認
+git add scripts/output/markov_confirmatory_production_noise01/markov_confirmatory_descriptive_primary.csv \
+        scripts/output/markov_confirmatory_production_noise01/markov_confirmatory_results_primary.json \
+        scripts/output/markov_confirmatory_production_noise00/markov_confirmatory_descriptive_sensitivity.csv \
+        scripts/output/markov_confirmatory_production_noise00/markov_confirmatory_results_sensitivity.json \
+        scripts/output/markov_confirmatory_regime_summary_primary.csv \
+        scripts/output/markov_confirmatory_regime_summary_sensitivity.csv \
+        scripts/output/figures/markov_confirmatory_*.png
+git commit -m "Markov confirmatory analysis: production results (primary + sensitivity)"
+git push -u origin claude/markov-production-analysis
+```
+
+(ファイル名は明示的に列挙 — `git add -A`や`git add .`は使わない。
+`_age_cache_*/`は`.gitignore`で除外済みなので`git status --short`に出ないはず。
+万一raw `.csv.gz`やシンボリックリンク自体が`git status`に出たら、pushせず報告する。)
