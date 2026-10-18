@@ -5,6 +5,8 @@ import random
 from evopersonality_abm.markov_apply import (
     bootstrap_aggregate,
     bootstrap_aggregate_with_sampler,
+    draw_cross_lineage_group_from_resampled_seeds,
+    draw_cross_lineage_group_from_seed_list,
     group_diversity_metrics,
     load_census,
     load_genotype_identities,
@@ -14,6 +16,7 @@ from evopersonality_abm.markov_apply import (
     resample_cross_seed_group,
     resample_virtual_group,
     resample_within_seed_group_with_identity,
+    seed_bootstrap_resample,
     series_to_word_set,
     similarity_to_human,
 )
@@ -353,3 +356,85 @@ def test_bootstrap_aggregate_with_sampler_with_diversity_adds_diversity_keys():
     assert "mean_n_distinct_genotypes" in result
     assert "mean_mean_pairwise_jaccard_distance" in result
     assert result["mean_n_distinct_genotypes"] == 5  # every seed_pool has a distinct identity
+
+
+# ------------------------------------------------------------------ seed-level bootstrap (preregistration section 5)
+
+def test_draw_cross_lineage_group_from_seed_list_matches_resample_cross_seed_group_for_distinct_seeds():
+    # resample_cross_seed_group's own body, after the refactor, must still
+    # behave identically: pick group_size distinct seeds, then delegate.
+    seed_pools = {s: _seed_pool(0, f"series_{s}", (1, f"table_{s}", "p")) for s in range(5)}
+    rng_a = random.Random(3)
+    chosen_seeds = rng_a.sample(list(seed_pools.keys()), 3)
+    expected = draw_cross_lineage_group_from_seed_list(seed_pools, chosen_seeds, rng_a)
+
+    rng_b = random.Random(3)
+    actual = resample_cross_seed_group(seed_pools, group_size=3, rng=rng_b)
+    assert actual == expected
+
+
+def test_draw_cross_lineage_group_from_seed_list_repeated_seed_draws_independent_individuals():
+    # a seed with multiple recorded repeats, drawn twice (two list entries
+    # for the same seed id), should be free to pick two DIFFERENT repeats
+    # -- not force-copy the same one. Use a seed whose pool has only
+    # distinct-valued repeats so we can detect whether both draws landed
+    # on the same repeat by chance vs by construction.
+    seed_pools = {0: ({0: 1}, {0: ["rep_a", "rep_b", "rep_c", "rep_d"]}, {0: (1, "t", "p")})}
+    rng = random.Random(0)
+    series, idents = draw_cross_lineage_group_from_seed_list(seed_pools, [0, 0, 0, 0, 0, 0, 0, 0], rng)
+    assert len(series) == 8
+    assert set(series) <= {"rep_a", "rep_b", "rep_c", "rep_d"}
+    # with 8 draws from 4 options, at least 2 distinct repeats should show up almost surely
+    assert len(set(series)) >= 2
+    assert idents == [(1, "t", "p")] * 8  # same seed -> same genotype identity every time here
+
+
+def test_seed_bootstrap_resample_returns_same_length_with_replacement():
+    seeds = list(range(100, 170))  # 70 seeds, matching the production plan
+    resampled = seed_bootstrap_resample(seeds, random.Random(0))
+    assert len(resampled) == len(seeds)
+    assert all(s in seeds for s in resampled)
+    assert len(set(resampled)) < len(seeds)  # with replacement -> almost surely some repeats
+
+
+def test_seed_bootstrap_resample_is_deterministic_given_same_rng_seed():
+    seeds = list(range(10))
+    a = seed_bootstrap_resample(seeds, random.Random(42))
+    b = seed_bootstrap_resample(seeds, random.Random(42))
+    assert a == b
+
+
+def test_draw_cross_lineage_group_from_resampled_seeds_raises_when_group_size_too_large():
+    seed_pools = {s: _seed_pool(0, f"s{s}", (1, f"t{s}", "p")) for s in range(3)}
+    try:
+        draw_cross_lineage_group_from_resampled_seeds(seed_pools, [0, 1, 2], group_size=5, rng=random.Random(0))
+        assert False, "expected ValueError"
+    except ValueError:
+        pass
+
+
+def test_draw_cross_lineage_group_from_resampled_seeds_handles_repeats_in_resampled_list():
+    # resampled_seed_list intentionally contains seed 0 three times (as a
+    # real seed_bootstrap_resample output would, with replacement) --
+    # group_size equal to the full resampled list length must still work,
+    # drawing one independent individual per position.
+    seed_pools = {
+        0: ({0: 1}, {0: ["r0a", "r0b", "r0c", "r0d", "r0e"]}, {0: (1, "t0", "p")}),
+        1: ({0: 1}, {0: ["r1"]}, {0: (1, "t1", "p")}),
+    }
+    resampled_seed_list = [0, 0, 0, 1]  # seed 0 appears 3 times, seed 1 once
+    series, idents = draw_cross_lineage_group_from_resampled_seeds(
+        seed_pools, resampled_seed_list, group_size=4, rng=random.Random(1),
+    )
+    assert len(series) == 4
+    assert series.count("r1") == 1
+    assert idents.count((1, "t1", "p")) == 1
+    assert idents.count((1, "t0", "p")) == 3
+
+
+def test_draw_cross_lineage_group_from_resampled_seeds_is_deterministic_given_same_rng_seed():
+    seed_pools = {s: _seed_pool(0, f"s{s}", (1, f"t{s}", "p")) for s in range(5)}
+    resampled_seed_list = [0, 0, 1, 2, 2, 2, 3, 4]
+    a = draw_cross_lineage_group_from_resampled_seeds(seed_pools, resampled_seed_list, 4, random.Random(7))
+    b = draw_cross_lineage_group_from_resampled_seeds(seed_pools, resampled_seed_list, 4, random.Random(7))
+    assert a == b

@@ -130,6 +130,30 @@ def resample_within_seed_group_with_identity(
 SeedPool = Tuple[Dict[int, int], Dict[int, List[str]], Dict[int, Tuple[int, str, str]]]
 
 
+def draw_cross_lineage_group_from_seed_list(
+    seed_pools: Dict[int, SeedPool],
+    seed_list: Sequence[int],
+    rng: random.Random,
+) -> Tuple[List[str], List[Tuple[int, str, str]]]:
+    """One independent individual (frequency-weighted within that seed's
+    own population) per entry of `seed_list` -- each entry triggers its
+    own draw, so a seed appearing more than once in `seed_list` (as
+    happens under the seed-level bootstrap below) contributes multiple
+    DIFFERENT individuals, never the same one copied -- per the
+    preregistration's explicit instruction (section 5): "復元抽出で同じ
+    seedが複数回選ばれた場合は、その seedから別々の個体を抽出する"."""
+    series: List[str] = []
+    idents: List[Tuple[int, str, str]] = []
+    for s in seed_list:
+        frequencies, series_by_genotype, identities = seed_pools[s]
+        genotype_ids = [g for g in frequencies if series_by_genotype.get(g)]
+        weights = [frequencies[g] for g in genotype_ids]
+        g = rng.choices(genotype_ids, weights=weights, k=1)[0]
+        series.append(rng.choice(series_by_genotype[g]))
+        idents.append(identities[g])
+    return series, idents
+
+
 def resample_cross_seed_group(
     seed_pools: Dict[int, SeedPool],
     group_size: int,
@@ -145,16 +169,35 @@ def resample_cross_seed_group(
     if group_size > len(seeds):
         raise ValueError(f"group_size={group_size} exceeds available seeds={len(seeds)}")
     chosen_seeds = rng.sample(seeds, group_size)
-    series: List[str] = []
-    idents: List[Tuple[int, str, str]] = []
-    for s in chosen_seeds:
-        frequencies, series_by_genotype, identities = seed_pools[s]
-        genotype_ids = [g for g in frequencies if series_by_genotype.get(g)]
-        weights = [frequencies[g] for g in genotype_ids]
-        g = rng.choices(genotype_ids, weights=weights, k=1)[0]
-        series.append(rng.choice(series_by_genotype[g]))
-        idents.append(identities[g])
-    return series, idents
+    return draw_cross_lineage_group_from_seed_list(seed_pools, chosen_seeds, rng)
+
+
+def seed_bootstrap_resample(seeds: Sequence[int], rng: random.Random) -> List[int]:
+    """One seed-level bootstrap resample (preregistration section 5):
+    draw len(seeds) seed-ids WITH replacement from `seeds`. The result is
+    a list the same length as `seeds`, generally containing repeats and
+    omissions -- it represents one alternate "population of lineages"
+    for assessing uncertainty from the finite number of evolved seeds."""
+    return [rng.choice(seeds) for _ in range(len(seeds))]
+
+
+def draw_cross_lineage_group_from_resampled_seeds(
+    seed_pools: Dict[int, SeedPool],
+    resampled_seed_list: Sequence[int],
+    group_size: int,
+    rng: random.Random,
+) -> Tuple[List[str], List[Tuple[int, str, str]]]:
+    """Scheme (B) applied to a seed-bootstrap resample: picks group_size
+    DISTINCT POSITIONS (not distinct seed VALUES -- a repeated seed-value
+    may be picked more than once, at different positions, each
+    contributing its own independent individual) from
+    `resampled_seed_list`, then draws one individual per picked position
+    via draw_cross_lineage_group_from_seed_list."""
+    if group_size > len(resampled_seed_list):
+        raise ValueError(f"group_size={group_size} exceeds resampled list length={len(resampled_seed_list)}")
+    chosen_positions = rng.sample(range(len(resampled_seed_list)), group_size)
+    chosen_seeds = [resampled_seed_list[i] for i in chosen_positions]
+    return draw_cross_lineage_group_from_seed_list(seed_pools, chosen_seeds, rng)
 
 
 def series_to_word_set(series: str, vocab) -> frozenset:
