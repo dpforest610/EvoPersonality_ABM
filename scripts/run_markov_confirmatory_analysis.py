@@ -114,7 +114,7 @@ def load_seed_pools_for_age(data_dir: Path, moves_suffix: str, age: int, seeds: 
 
 def process_one_age(
     data_dir_str: str, moves_suffix: str, age: int, seeds: List[int],
-    human_weights_path: str, n_boot_point: int, n_boot_descriptive: int,
+    human_weights_path: str, n_boot_point: int, n_boot_descriptive: int, n_boot_scheme_a: int,
     n_bootstrap_seed: int, master_seed: str, group_for_human: Dict[str, int],
     cycle_thresholds: Optional[List[float]] = None,
 ) -> dict:
@@ -156,7 +156,7 @@ def process_one_age(
                     return resample_within_seed_group_with_identity(freq, sbg, idn, gs, rng)
 
                 a_results.append(bootstrap_aggregate_with_sampler(
-                    sample_fn_a, opponent, n_boot_descriptive, rng_a, human_weights_by_group, vocab, with_diversity=True,
+                    sample_fn_a, opponent, n_boot_scheme_a, rng_a, human_weights_by_group, vocab, with_diversity=True,
                 ))
             if a_results:
                 all_keys = {k for r in a_results for k in r}
@@ -187,7 +187,7 @@ def process_one_age(
 
 def run_all_ages(
     data_dir: Path, moves_suffix: str, ages: List[int], seeds: List[int],
-    human_weights_path: str, n_boot_point: int, n_boot_descriptive: int,
+    human_weights_path: str, n_boot_point: int, n_boot_descriptive: int, n_boot_scheme_a: int,
     n_bootstrap_seed: int, master_seed: str, workers: int, cache_dir: Path,
     group_for_human: Dict[str, int], cycle_thresholds: Optional[List[float]] = None,
 ):
@@ -200,7 +200,7 @@ def run_all_ages(
         futures = {
             ex.submit(
                 process_one_age, str(data_dir), moves_suffix, age, seeds,
-                human_weights_path, n_boot_point, n_boot_descriptive, n_bootstrap_seed,
+                human_weights_path, n_boot_point, n_boot_descriptive, n_boot_scheme_a, n_bootstrap_seed,
                 master_seed, group_for_human, cycle_thresholds,
             ): age
             for age in pending
@@ -290,8 +290,16 @@ def main():
     p.add_argument("--window-start", type=int, default=1000)
     p.add_argument("--window-end", type=int, default=5000)
     p.add_argument("--probe-interval", type=int, default=50)
-    p.add_argument("--n-boot-point", type=int, default=1000, help="preregistration section 5: point-estimate repeats for TFT/AllD/AllC")
-    p.add_argument("--n-boot-descriptive", type=int, default=200, help="bootstrap repeats for the other 4 opponents + scheme A comparison")
+    p.add_argument("--n-boot-point", type=int, default=1000, help="preregistration section 5: point-estimate repeats for TFT/AllD/AllC (scheme B)")
+    p.add_argument("--n-boot-descriptive", type=int, default=200, help="scheme B bootstrap repeats for the other 4 opponents (Random/Gradual/GradualAppeasement/WSLS)")
+    p.add_argument(
+        "--n-boot-scheme-a", type=int, default=30,
+        help="scheme A (within-seed, descriptive comparison only -- section 6 item 1) bootstrap repeats PER SEED. "
+        "Kept much smaller than --n-boot-descriptive by default: scheme A loops over every seed "
+        "(70 in production), so its total cost is n_boot_scheme_a x n_seeds x n_opponents x 3 group "
+        "sizes -- at 200 (matching the pilot, which only had 10 seeds) this would dominate the whole "
+        "run's compute time at 70 seeds. 30 keeps the total close to the pilot's per-seed-loop cost.",
+    )
     p.add_argument("--n-bootstrap-seed", type=int, default=2000, help="preregistration section 5: seed-level bootstrap iterations")
     p.add_argument("--alpha", type=float, default=0.05)
     p.add_argument("--workers", type=int, default=5)
@@ -333,7 +341,7 @@ def main():
     t0 = time.time()
     descriptive_rows, time_avg_sums, time_avg_counts = run_all_ages(
         data_dir, args.moves_suffix, ages, seeds, args.human_weights,
-        args.n_boot_point, args.n_boot_descriptive, args.n_bootstrap_seed,
+        args.n_boot_point, args.n_boot_descriptive, args.n_boot_scheme_a, args.n_bootstrap_seed,
         args.master_seed, args.workers, cache_dir, group_for_human, cycle_thresholds,
     )
     print(f"all ages done in {time.time() - t0:.0f}s", flush=True)
