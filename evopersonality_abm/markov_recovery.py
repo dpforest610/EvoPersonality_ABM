@@ -107,6 +107,21 @@ def widest_path_threshold(edges: Dict[Tuple[str, str], float], start: str = "底
     return None
 
 
+# Human reference values (manuscript), ported verbatim from
+# markov3_widest_path_reference.py -- for overlaying on the production
+# analysis's recovery/descent trend figures (preregistration section 6
+# item 2). Recovery (底底底->和和和) is Table 15, only reported for
+# TFT/GRA/RAN in the manuscript (no AllC/AllD recovery values exist to
+# overlay). Descent (和和和->底底底) under TFT is Table 8; the manuscript
+# has no descent reference for GRA/RAN/AllC/AllD.
+EXPECTED_RECOVERY: Dict[Tuple[str, str], float] = {
+    ("TFT", "Secure"): 0.526, ("TFT", "Mix"): 0.407, ("TFT", "Fearful"): 0.490,
+    ("GRA", "Secure"): 0.348, ("GRA", "Mix"): 0.357, ("GRA", "Fearful"): 0.378,
+    ("RAN", "Secure"): 0.269, ("RAN", "Mix"): 0.250, ("RAN", "Fearful"): 0.276,
+}
+EXPECTED_DESCENT_TFT: Dict[str, float] = {"Secure": 0.556, "Mix": 0.474, "Fearful": 0.509}
+
+
 # ------------------------------------------------------------------ structure metrics (7.1)
 
 def cycle_jstar(edges: Dict[Tuple[str, str], float], seq: Sequence[str]) -> float:

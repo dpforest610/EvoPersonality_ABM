@@ -347,43 +347,53 @@ def main():
         "point_estimates": {f"{opp}:{g}": v for (opp, g), v in point_estimates.items()},
     }
 
-    if args.role == "primary":
-        bootstrap_diffs = build_bootstrap_diff_distributions(time_avg_sums, time_avg_counts, args.n_bootstrap_seed)
-        point_estimate_diffs = {
-            (opponent, groups): comparison_diff(
-                {g: point_estimates[(opponent, g)] for g in ("S", "M", "F") if (opponent, g) in point_estimates},
-                groups,
-            )
-            for _hyp, _label, opponent, groups in COMPARISONS
-            if all((opponent, g) in point_estimates for g in groups.split("-"))
-        }
-        missing = [key for key in [(o, g) for _h, _l, o, g in COMPARISONS] if key not in bootstrap_diffs or key not in point_estimate_diffs]
-        if missing:
-            print(f"WARNING: missing data for comparisons {missing}; confirmatory results incomplete", flush=True)
-        else:
-            hypothesis_results = evaluate_hypotheses(point_estimate_diffs, bootstrap_diffs, alpha=args.alpha)
-            results_payload["confirmatory"] = [
-                {
-                    "hypothesis": h.hypothesis,
-                    "opponent": h.opponent,
-                    "verdict": h.verdict,
-                    "comparisons": [
-                        {
-                            "label": c.label,
-                            "point_estimate_diff": c.point_estimate_diff,
-                            "p_value": c.p_value,
-                            "significant_after_holm": c.significant,
-                        }
-                        for c in h.comparisons
-                    ],
-                }
-                for h in hypothesis_results
-            ]
+    # The same H1-H3-style comparisons are computed for BOTH roles: for
+    # role=primary this is the preregistered confirmatory test itself
+    # (section 4-5); for role=sensitivity, preregistration section 6
+    # item 6 asks for "H1〜H3と同じ比較を行い、記述として報告する" (same
+    # comparisons, reported descriptively) -- so the statistics are
+    # identical, only the framing/results key differs, making clear the
+    # sensitivity numbers are not a second confirmatory test and are not
+    # subject to the preregistered stopping rule.
+    bootstrap_diffs = build_bootstrap_diff_distributions(time_avg_sums, time_avg_counts, args.n_bootstrap_seed)
+    point_estimate_diffs = {
+        (opponent, groups): comparison_diff(
+            {g: point_estimates[(opponent, g)] for g in ("S", "M", "F") if (opponent, g) in point_estimates},
+            groups,
+        )
+        for _hyp, _label, opponent, groups in COMPARISONS
+        if all((opponent, g) in point_estimates for g in groups.split("-"))
+    }
+    missing = [key for key in [(o, g) for _h, _l, o, g in COMPARISONS] if key not in bootstrap_diffs or key not in point_estimate_diffs]
+    results_key = "confirmatory" if args.role == "primary" else "descriptive_h1_h3_replication"
+    if missing:
+        print(f"WARNING: missing data for comparisons {missing}; {results_key} results incomplete", flush=True)
+        results_payload[results_key] = None
     else:
-        results_payload["confirmatory"] = None
+        hypothesis_results = evaluate_hypotheses(point_estimate_diffs, bootstrap_diffs, alpha=args.alpha)
+        results_payload[results_key] = [
+            {
+                "hypothesis": h.hypothesis,
+                "opponent": h.opponent,
+                "verdict": h.verdict,
+                "comparisons": [
+                    {
+                        "label": c.label,
+                        "point_estimate_diff": c.point_estimate_diff,
+                        "p_value": c.p_value,
+                        "significant_after_holm": c.significant,
+                    }
+                    for c in h.comparisons
+                ],
+            }
+            for h in hypothesis_results
+        ]
+    if args.role == "sensitivity":
         results_payload["note"] = (
-            "role=sensitivity: preregistration section 6 item 6 -- report descriptively, "
-            "not a second confirmatory test."
+            "role=sensitivity (noise_rate=0.0): preregistration section 6 item 6 -- "
+            "the 'descriptive_h1_h3_replication' block applies the same statistics as the "
+            "primary confirmatory test (section 4-5), but is NOT a second confirmatory test "
+            "and is not subject to the preregistered stopping rule; report descriptively."
         )
 
     results_path = results_dir / f"markov_confirmatory_results_{args.role}.json"

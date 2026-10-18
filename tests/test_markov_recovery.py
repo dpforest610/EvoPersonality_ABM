@@ -4,6 +4,8 @@ import random
 import pytest
 
 from evopersonality_abm.markov_recovery import (
+    EXPECTED_DESCENT_TFT,
+    EXPECTED_RECOVERY,
     NAMED_CIRCUITS,
     build_edges,
     count_simple_cycles,
@@ -265,3 +267,19 @@ def test_count_simple_cycles_handles_a_dense_random_graph_without_crashing():
                 edges[(a, b)] = rng.random()
     n = count_simple_cycles(edges, threshold=0.3, max_length=6)
     assert isinstance(n, int) and n >= 0
+
+
+# ------------------------------------------------------------------ human reference values (Table 8/15)
+
+def test_expected_recovery_covers_tft_gra_ran_three_groups_each():
+    assert set(EXPECTED_RECOVERY) == {
+        (opp, group) for opp in ("TFT", "GRA", "RAN") for group in ("Secure", "Mix", "Fearful")
+    }
+    for v in EXPECTED_RECOVERY.values():
+        assert 0.0 <= v <= 1.0
+
+
+def test_expected_descent_tft_covers_three_groups():
+    assert set(EXPECTED_DESCENT_TFT) == {"Secure", "Mix", "Fearful"}
+    for v in EXPECTED_DESCENT_TFT.values():
+        assert 0.0 <= v <= 1.0
