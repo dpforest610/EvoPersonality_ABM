@@ -116,6 +116,7 @@ def process_one_age(
     data_dir_str: str, moves_suffix: str, age: int, seeds: List[int],
     human_weights_path: str, n_boot_point: int, n_boot_descriptive: int,
     n_bootstrap_seed: int, master_seed: str, group_for_human: Dict[str, int],
+    cycle_thresholds: Optional[List[float]] = None,
 ) -> dict:
     data_dir = Path(data_dir_str)
     human_weights = load_human_weights(Path(human_weights_path))
@@ -143,6 +144,7 @@ def process_one_age(
 
                 result_b = bootstrap_aggregate_with_sampler(
                     sample_fn_b, opponent, n_boot_b, rng_b, human_weights_by_group, vocab, with_diversity=True,
+                    cycle_thresholds=cycle_thresholds,
                 )
                 descriptive_rows.append({"scheme": "B", "age": age, "opponent": opponent, "group_size": group_size, **result_b})
 
@@ -187,7 +189,7 @@ def run_all_ages(
     data_dir: Path, moves_suffix: str, ages: List[int], seeds: List[int],
     human_weights_path: str, n_boot_point: int, n_boot_descriptive: int,
     n_bootstrap_seed: int, master_seed: str, workers: int, cache_dir: Path,
-    group_for_human: Dict[str, int],
+    group_for_human: Dict[str, int], cycle_thresholds: Optional[List[float]] = None,
 ):
     cache_dir.mkdir(parents=True, exist_ok=True)
     pending = [a for a in ages if not age_cache_path(cache_dir, a).exists()]
@@ -199,7 +201,7 @@ def run_all_ages(
             ex.submit(
                 process_one_age, str(data_dir), moves_suffix, age, seeds,
                 human_weights_path, n_boot_point, n_boot_descriptive, n_bootstrap_seed,
-                master_seed, group_for_human,
+                master_seed, group_for_human, cycle_thresholds,
             ): age
             for age in pending
         }
@@ -301,8 +303,17 @@ def main():
         "the pipeline against a dataset too small for the real 56/46/69 (e.g. the "
         "10-seed pilot); production runs must use the preregistered 56/46/69.",
     )
+    p.add_argument(
+        "--cycle-thresholds", type=str, default="0.05,0.1,0.15,0.2,0.25,0.3,0.35,0.4,0.45,0.5,0.55,0.6,0.65,0.7",
+        help="preregistration section 6 item 3, Table 12: comma-separated Jaccard thresholds "
+        "for the simple-cycle-count sweep (scheme B only, all opponents, max cycle length 6). "
+        "Pass an empty string to skip (saves a little compute; the sweep is cheap -- benchmarked "
+        "at <=1.5ms per threshold even on a 64-node network).",
+    )
     p.add_argument("--results-dir", type=str, required=True)
     args = p.parse_args()
+
+    cycle_thresholds = [float(x) for x in args.cycle_thresholds.split(",") if x.strip()] or None
 
     group_for_human: Dict[str, int] = {}
     for part in args.group_sizes.split(","):
@@ -323,7 +334,7 @@ def main():
     descriptive_rows, time_avg_sums, time_avg_counts = run_all_ages(
         data_dir, args.moves_suffix, ages, seeds, args.human_weights,
         args.n_boot_point, args.n_boot_descriptive, args.n_bootstrap_seed,
-        args.master_seed, args.workers, cache_dir, group_for_human,
+        args.master_seed, args.workers, cache_dir, group_for_human, cycle_thresholds,
     )
     print(f"all ages done in {time.time() - t0:.0f}s", flush=True)
 

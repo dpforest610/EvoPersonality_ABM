@@ -100,6 +100,24 @@ def test_resample_virtual_group_is_deterministic_given_same_rng_seed():
 
 # ------------------------------------------------------------------ network_metrics
 
+def test_network_metrics_cycle_thresholds_defaults_to_no_cycle_counts():
+    edges = {("a", "b"): 0.5, ("b", "a"): 0.6}
+    m = network_metrics(edges, "AllD")
+    assert "cycle_counts" not in m
+
+
+def test_network_metrics_cycle_thresholds_matches_count_simple_cycles():
+    from evopersonality_abm.markov_recovery import count_simple_cycles
+
+    edges = {("a", "b"): 0.5, ("b", "a"): 0.6, ("b", "c"): 0.2, ("c", "b"): 0.9}
+    m = network_metrics(edges, "AllD", cycle_thresholds=[0.1, 0.3, 0.7])
+    assert m["cycle_counts"] == {
+        0.1: count_simple_cycles(edges, 0.1, max_length=6),
+        0.3: count_simple_cycles(edges, 0.3, max_length=6),
+        0.7: count_simple_cycles(edges, 0.7, max_length=6),
+    }
+
+
 def test_network_metrics_hand_built_small_network():
     # 底底底 -(.8)-> 底底惨 -(.6)-> 底惨底 -(.9)-> 惨底底 -(.3)-> 底底底 (recovers to nothing but itself; no 和和和 at all)
     edges = {
@@ -449,3 +467,37 @@ def test_draw_cross_lineage_group_from_resampled_seeds_is_deterministic_given_sa
     a = draw_cross_lineage_group_from_resampled_seeds(seed_pools, resampled_seed_list, 4, random.Random(7))
     b = draw_cross_lineage_group_from_resampled_seeds(seed_pools, resampled_seed_list, 4, random.Random(7))
     assert a == b
+
+
+# ------------------------------------------------------------------ bootstrap_aggregate_with_sampler cycle_thresholds
+
+def test_bootstrap_aggregate_with_sampler_cycle_thresholds_adds_mean_cycle_count_keys():
+    vocab = load_vocab("AllD")
+    series = series_from_moves(["D"] * 20, ["D"] * 20, n_rounds=20)
+    seed_pools = {s: _seed_pool(0, series, (1, f"t{s}", "p")) for s in range(5)}
+
+    def sample_fn(rng):
+        return resample_cross_seed_group(seed_pools, group_size=5, rng=rng)
+
+    result = bootstrap_aggregate_with_sampler(
+        sample_fn, "AllD", n_boot=5, rng=random.Random(1),
+        human_weights_by_group={"Secure": {}, "Mix": {}, "Fearful": {}}, vocab=vocab,
+        cycle_thresholds=[0.1, 0.5],
+    )
+    assert "mean_cycle_count_0.1" in result
+    assert "mean_cycle_count_0.5" in result
+
+
+def test_bootstrap_aggregate_with_sampler_without_cycle_thresholds_has_no_cycle_keys():
+    vocab = load_vocab("AllD")
+    series = series_from_moves(["D"] * 20, ["D"] * 20, n_rounds=20)
+    seed_pools = {s: _seed_pool(0, series, (1, f"t{s}", "p")) for s in range(5)}
+
+    def sample_fn(rng):
+        return resample_cross_seed_group(seed_pools, group_size=5, rng=rng)
+
+    result = bootstrap_aggregate_with_sampler(
+        sample_fn, "AllD", n_boot=5, rng=random.Random(1),
+        human_weights_by_group={"Secure": {}, "Mix": {}, "Fearful": {}}, vocab=vocab,
+    )
+    assert not any(k.startswith("mean_cycle_count") for k in result)

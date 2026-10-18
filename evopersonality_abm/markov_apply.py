@@ -32,6 +32,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from .markov_recovery import (
     NAMED_CIRCUITS,
     build_edges,
+    count_simple_cycles,
     cycle_jstar,
     load_vocab,
     series_from_moves,
@@ -252,7 +253,9 @@ def group_diversity_metrics(
     }
 
 
-def network_metrics(edges: Dict[Tuple[str, str], float], opponent: str) -> dict:
+def network_metrics(
+    edges: Dict[Tuple[str, str], float], opponent: str, cycle_thresholds: Optional[Sequence[float]] = None,
+) -> dict:
     """One bootstrap network's metrics: widest-path recovery (底底底->和和和)
     and descent (和和和->底底底), Table 7 j* for each of the opponent's
     named circuits (markov_recovery.NAMED_CIRCUITS), and the largest
@@ -267,12 +270,18 @@ def network_metrics(edges: Dict[Tuple[str, str], float], opponent: str) -> dict:
     up directly by the probe.py name silently returned [] for every
     "Gradual"/"Random" call (no opponent name happens to collide with the
     wrong key by accident), so GRA's and RAN's circuits were never
-    actually applied before this fix."""
+    actually applied before this fix.
+
+    cycle_thresholds (optional, default None = skip): Table 12's
+    threshold-sweep simple-cycle count (markov_recovery.count_simple_cycles,
+    max_length=6), one count per threshold in this sequence. None by
+    default to keep this function's -- and bootstrap_aggregate's --
+    existing callers (e.g. the pilot analysis scripts) unaffected."""
     nodes = {x for e in edges for x in e}
     circuit_key = CIRCUIT_KEY.get(opponent)
     jstars = {i: cycle_jstar(edges, seq) for i, seq in enumerate(NAMED_CIRCUITS.get(circuit_key, []))}
     sccs = strongly_connected_components(edges, threshold=0.40)
-    return {
+    result = {
         "has_bottom3": "底底底" in nodes,
         "has_top3": "和和和" in nodes,
         "recovery": widest_path_threshold(edges, start="底底底", goal="和和和"),
@@ -280,6 +289,9 @@ def network_metrics(edges: Dict[Tuple[str, str], float], opponent: str) -> dict:
         "largest_scc_at_40": max((len(c) for c in sccs), default=0),
         "jstars": jstars,
     }
+    if cycle_thresholds:
+        result["cycle_counts"] = {t: count_simple_cycles(edges, t, max_length=6) for t in cycle_thresholds}
+    return result
 
 
 def load_human_weights(csv_path: Path) -> Dict[Tuple[str, str], Dict[Tuple[str, str], float]]:
@@ -333,11 +345,12 @@ def _accumulate_bootstrap_metrics(
     edges: Dict[Tuple[str, str], float],
     opponent: str,
     human_weights_by_group: Dict[str, Dict[Tuple[str, str], float]],
+    cycle_thresholds: Optional[Sequence[float]] = None,
 ) -> Tuple[bool, bool]:
     """One bootstrap draw's network_metrics/similarity_to_human contribution
     to the running sums/counts (shared by bootstrap_aggregate and
     bootstrap_aggregate_with_sampler). Returns (has_bottom3, has_top3)."""
-    m = network_metrics(edges, opponent)
+    m = network_metrics(edges, opponent, cycle_thresholds=cycle_thresholds)
     for key in ("recovery", "descent"):
         if m[key] is not None:
             sums[key] += m[key]
@@ -347,6 +360,9 @@ def _accumulate_bootstrap_metrics(
     for ci, v in m["jstars"].items():
         sums[f"jstar_{ci}"] += v
         counts[f"jstar_{ci}"] += 1
+    for t, v in m.get("cycle_counts", {}).items():
+        sums[f"cycle_count_{t}"] += v
+        counts[f"cycle_count_{t}"] += 1
     for group_name, hw in human_weights_by_group.items():
         corr, jacc = similarity_to_human(edges, hw)
         if corr is not None:
@@ -410,6 +426,7 @@ def bootstrap_aggregate_with_sampler(
     human_weights_by_group: Dict[str, Dict[Tuple[str, str], float]],
     vocab,
     with_diversity: bool = False,
+    cycle_thresholds: Optional[Sequence[float]] = None,
 ) -> Dict[str, float]:
     """Like bootstrap_aggregate, but draws each bootstrap's virtual group
     via an arbitrary `sample_fn(rng) -> (series_list, idents_list)`
@@ -417,7 +434,8 @@ def bootstrap_aggregate_with_sampler(
     same metrics machinery run over resample_cross_seed_group too
     (design doc 2026-10-16, comparing sampling schemes (A)/(B)). If
     with_diversity, also aggregates group_diversity_metrics
-    (mean_n_distinct_genotypes, mean_mean_pairwise_jaccard_distance)."""
+    (mean_n_distinct_genotypes, mean_mean_pairwise_jaccard_distance).
+    cycle_thresholds: see network_metrics (Table 12, default off)."""
     sums: Dict[str, float] = defaultdict(float)
     counts: Dict[str, int] = defaultdict(int)
     n_bottom3 = n_top3 = 0
@@ -425,7 +443,9 @@ def bootstrap_aggregate_with_sampler(
     for _ in range(n_boot):
         series_list, idents_list = sample_fn(rng)
         edges = build_edges(series_list, vocab)
-        has_bottom3, has_top3 = _accumulate_bootstrap_metrics(sums, counts, edges, opponent, human_weights_by_group)
+        has_bottom3, has_top3 = _accumulate_bootstrap_metrics(
+            sums, counts, edges, opponent, human_weights_by_group, cycle_thresholds=cycle_thresholds,
+        )
         n_bottom3 += has_bottom3
         n_top3 += has_top3
         if with_diversity:
