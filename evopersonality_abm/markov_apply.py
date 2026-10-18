@@ -40,14 +40,29 @@ from .markov_recovery import (
 )
 
 HUMAN_GROUP_SIZES = {"Secure": 56, "Mix": 46, "Fearful": 69}
-# probe.py opponent name -> (human_network_weights.csv label, markov_recovery vocab name)
+# probe.py opponent name -> (human_network_weights.csv label, markov_recovery vocab name).
+# human label is None for the extended-set opponents (GradualAppeasement, WSLS):
+# the human study has no data for them (design doc section 3.4 / preregistration
+# section 6 item 7, "網の指標の推移のみを記述する"), so similarity_to_human is
+# never meaningfully computed for them (an empty human_weights_by_group is passed).
 OPPONENT_INFO = {
     "TFT": ("TFT", "TFT"),
     "AllC": ("ALC", "AllC"),
     "AllD": ("ALD", "AllD"),
     "Random": ("RAN", "RAN"),
     "Gradual": ("GRA", "GRA"),
+    "GradualAppeasement": (None, "GRA"),
+    "WSLS": (None, "GRA"),
 }
+
+# Table 7's named circuits (markov_recovery.NAMED_CIRCUITS) were identified
+# for specific opponents only (TFT/GRA/AllC/AllD/RAN) -- NOT simply "every
+# opponent sharing that vocabulary". GradualAppeasement and WSLS use the
+# same 64-word GRA vocabulary for network CONSTRUCTION, but must not
+# silently inherit GRA's circuit list for j* -- this mapping (rather than
+# OPPONENT_INFO's vocab_name field) is what network_metrics uses to decide
+# which circuits, if any, apply to a given opponent.
+CIRCUIT_KEY = {"TFT": "TFT", "AllC": "AllC", "AllD": "AllD", "Random": "RAN", "Gradual": "GRA"}
 
 
 def load_census(path: Path) -> Dict[int, int]:
@@ -245,13 +260,16 @@ def network_metrics(edges: Dict[Tuple[str, str], float], opponent: str) -> dict:
 
     `opponent` is the probe.py name (e.g. "Gradual", "Random") -- NAMED_CIRCUITS
     is keyed by the markov_recovery vocab label instead (e.g. "GRA", "RAN"),
-    so this maps through OPPONENT_INFO before the lookup. Bug fixed
-    2026-10-16: looking NAMED_CIRCUITS up directly by the probe.py name
-    silently returned [] for every "Gradual"/"Random" call (no opponent
-    name happens to collide with the wrong key by accident), so GRA's and
-    RAN's circuits were never actually applied before this fix."""
+    so this maps through CIRCUIT_KEY before the lookup (NOT OPPONENT_INFO's
+    vocab_name field -- that would let GradualAppeasement/WSLS silently
+    inherit GRA's circuits just because they share its vocabulary; see
+    CIRCUIT_KEY's docstring). Bug fixed 2026-10-16: looking NAMED_CIRCUITS
+    up directly by the probe.py name silently returned [] for every
+    "Gradual"/"Random" call (no opponent name happens to collide with the
+    wrong key by accident), so GRA's and RAN's circuits were never
+    actually applied before this fix."""
     nodes = {x for e in edges for x in e}
-    circuit_key = OPPONENT_INFO.get(opponent, (opponent, opponent))[1]
+    circuit_key = CIRCUIT_KEY.get(opponent)
     jstars = {i: cycle_jstar(edges, seq) for i, seq in enumerate(NAMED_CIRCUITS.get(circuit_key, []))}
     sccs = strongly_connected_components(edges, threshold=0.40)
     return {

@@ -133,6 +133,17 @@ def test_network_metrics_recovery_defined_when_goal_reachable():
     assert m["recovery"] == min(0.9, 0.5, 0.4)  # widest_path_threshold's bottleneck
 
 
+def test_network_metrics_extended_set_opponents_get_no_circuits_despite_shared_vocab():
+    # GradualAppeasement and WSLS share GRA's 64-word vocabulary (for
+    # network construction) but must NOT inherit GRA's 5 named circuits
+    # -- those were identified specifically for Gradual (no appeasement),
+    # not validated for the extended-set opponents.
+    edges = {("底惨底", "惨底惨"): 0.6, ("惨底惨", "底惨底"): 0.8}  # would match GRA's circuit #2 if inherited
+    for opponent in ("GradualAppeasement", "WSLS"):
+        m = network_metrics(edges, opponent)
+        assert m["jstars"] == {}
+
+
 def test_network_metrics_maps_probe_opponent_name_to_circuit_list_key():
     # regression test for the 2026-10-16 bug: NAMED_CIRCUITS is keyed by
     # the markov_recovery vocab label ("GRA"/"RAN"), not the probe.py
