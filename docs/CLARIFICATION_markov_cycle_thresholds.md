@@ -1,7 +1,7 @@
 # 補足:単純閉路の閾値刻みの操作的定義(事前登録6節3項)
 
 - 状態:**確定**
-- 確定コミット:(このファイルの直後のコミットで記録)
+- 確定コミット:`1f643c7a499c023818a9ab48244d1ffb0ceff981`(2026-10-19T07:10:09+00:00)
 - 対象:`docs/PREREGISTRATION_markov_structure_evolution.md`(確定コミット`ccc0b1b7a76f22e150e7c097b1757b1fb8e54e0e`)6節3項(Table 12)
 - 決定時点:**本番データの分析(`scripts/run_markov_confirmatory_analysis.py`の本番実行)を走らせる前**
 
