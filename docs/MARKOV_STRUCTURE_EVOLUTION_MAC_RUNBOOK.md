@@ -277,72 +277,62 @@ generations=5000に合わせてパラメータを変えて再実行するか、�
 
 ## 8. 確証的分析の実行(事前登録4〜6節)
 
-**対象ブランチ: `claude/markov-production-analysis`(`claude/lindgren-population-evolution-08fat1`とは別)。**
-生の対戦記録(raw moves、計数十GB)はMacにしかないので、このスクリプトもMacで
-実行するが、**感度分析(ノイズ0.0)がまだ走っている元のclone・作業ディレクトリは
-触らない** — 別のcloneを作り、raw probe dataだけシンボリックリンクで共有する。
+**対象ブランチ: `claude/markov-production-analysis`。**
+両条件(主条件ノイズ0.01・感度分析ノイズ0.0)が完走し、`claude/lindgren-population-evolution-08fat1`
+がこのブランチにマージされた後は、生の対戦記録(raw `.csv.gz`、`.gitignore`対象で
+コミットには含まれないが、評価ランを実行した既存の作業フォルダには既にローカルに
+存在する)を含めて、**別cloneを作らず、既存の作業フォルダでブランチを切り替えるだけ**
+でよい。
 
-### 8-1. 別cloneのセットアップ
+### 8-1. 既存の作業フォルダでブランチを切り替える
 
-既存のclone(以下「本番clone」、1節でcheckoutした`claude/lindgren-population-evolution-08fat1`の
-ディレクトリ)はそのままにして、隣に新しいcloneを作る:
+評価ラン(1〜7節)を実行した、venv・raw probe dataがある既存の作業フォルダで:
 
 ```bash
-cd ..   # EvoPersonality_ABM/ の一つ上
-git clone https://github.com/dpforest610/EvoPersonality_ABM.git EvoPersonality_ABM_confirmatory
-cd EvoPersonality_ABM_confirmatory
+cd EvoPersonality_ABM   # 既存の作業フォルダ
+git status --short       # 未コミットの変更が無いことを確認(あれば先に相談)
+git fetch origin claude/markov-production-analysis
 git checkout claude/markov-production-analysis
-python3 -m venv venv
-source venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt
+git pull origin claude/markov-production-analysis
+source venv/bin/activate   # 既存のvenv(Python 3.15)をそのまま使う。新しい依存は追加していないのでpip installは不要
 python3 -m pytest -q
 ```
 
 全件passedになることを確認(1件でもfailしたら進まずまず報告して)。
-
-### 8-2. raw probe dataをシンボリックリンク
-
-新しいcloneには(`.gitignore`対象の)raw `.csv.gz`が無いので、本番cloneの
-出力ディレクトリをリンクする(パスは実際の本番cloneの場所に合わせて調整):
-
-```bash
-mkdir -p scripts/output
-ln -s ../../EvoPersonality_ABM/scripts/output/markov_sweep_production_noise01 scripts/output/markov_sweep_production_noise01
-ln -s ../../EvoPersonality_ABM/scripts/output/markov_sweep_production_noise00 scripts/output/markov_sweep_production_noise00
-ls scripts/output/markov_sweep_production_noise01 | head   # リンクが機能しているか確認
-```
+`git checkout`はgitignore対象のraw `.csv.gz`(評価ラン1〜7節で生成済み)を消さないので、
+そのまま8-3のコマンドで読める(別clone・シンボリックリンクは不要)。
 
 ### 8-3. 実行コマンド
 
 デフォルト値はすべて事前登録(4〜5節)に合わせてあるので、追加で指定する
-フラグは最小限で済む。**主条件(ノイズ0.01、`run_lindgren_markov_sweep.py`が
-評価段と同時にプローブしているので既に完了している)を先に実行**し、
-感度分析(ノイズ0.0)は該当の評価データが`70/70`完了してから実行する(4節の
-`check_markov_sweep_progress.py`で確認)。
+フラグは最小限で済む。両条件の評価データは既に`70/70`完了しているので、
+**主条件→感度分析を1つのバックグラウンドジョブとして続けて実行する**(前者が
+正常終了してから後者が始まる。前者が異常終了した場合は`&&`により後者は
+実行されない):
 
 ```bash
 mkdir -p logs
-nohup caffeinate -dimsu venv/bin/python scripts/run_markov_confirmatory_analysis.py \
+nohup caffeinate -dimsu bash -c '
+venv/bin/python scripts/run_markov_confirmatory_analysis.py \
   --data-dir scripts/output/markov_sweep_production_noise01 \
   --moves-suffix noise0p01 \
   --role primary \
   --results-dir scripts/output/markov_confirmatory_production_noise01 \
-  > logs/markov_confirmatory_primary.log 2>&1 &
-disown
-```
-
-主条件が終わったら(ログ末尾に`all ages done in ...s`が出る):
-
-```bash
-nohup caffeinate -dimsu venv/bin/python scripts/run_markov_confirmatory_analysis.py \
+&& \
+venv/bin/python scripts/run_markov_confirmatory_analysis.py \
   --data-dir scripts/output/markov_sweep_production_noise00 \
   --moves-suffix noise0 \
   --role sensitivity \
-  --results-dir scripts/output/markov_confirmatory_production_noise00 \
-  > logs/markov_confirmatory_sensitivity.log 2>&1 &
+  --results-dir scripts/output/markov_confirmatory_production_noise00
+' > logs/markov_confirmatory_both.log 2>&1 &
 disown
 ```
+
+(主条件・感度分析どちらのログも同じ`logs/markov_confirmatory_both.log`に
+続けて出力される。主条件の完了は、ログ中に最初に出る`all ages done in ...s`
+[primaryの`--results-dir`を含む行]で判断できる。別々に起動したい場合は、
+上記の`bash -c '...'`の中身を2回に分けて、8-3の旧版と同じように個別の
+`nohup caffeinate -dimsu venv/bin/python ...`としてそれぞれ実行してもよい。)
 
 (`--moves-suffix`は評価ノイズではなく**プローブ時のノイズ**を指す
 ファイル名の一部 — `run_lindgren_markov_sweep.py`は常に両方のプローブノイズ
@@ -386,9 +376,13 @@ time venv/bin/python scripts/run_markov_confirmatory_analysis.py \
 
 ```bash
 ps aux | grep run_markov_confirmatory_analysis | grep -v grep   # 生きているか確認
-tail -40 logs/markov_confirmatory_primary.log                    # 進捗ログ
+tail -40 logs/markov_confirmatory_both.log                       # 進捗ログ(主条件・感度分析とも)
 ls scripts/output/markov_confirmatory_production_noise01/_age_cache_primary/ | wc -l   # 完了済み時点数(81で全完了)
 ```
+
+(`bash -c '... && ...'`で起動しているため、再開したい場合も8-3のコマンドを
+そのまま再度打てばよい — 主条件が既に全時点キャッシュ済みなら即座にスキップされ、
+感度分析から実質的に再開される。)
 
 ### 8-6. 付随する図・分析スクリプト
 
@@ -419,11 +413,11 @@ venv/bin/python scripts/analyze_markov_confirmatory_regime_correspondence.py \
 
 **`claude/markov-production-analysis`ブランチにのみpushする。
 `claude/lindgren-population-evolution-08fat1`には絶対にpushしない**
-(感度分析の進化ランがそちらで進行中のため)。
+(確証的分析の結果は分析用ブランチのものであり、評価ランのブランチに戻す必要はない)。
 
 ```bash
 git branch --show-current   # claude/markov-production-analysis であることを確認してからpush
-git status --short           # _age_cache_*/ やraw .csv.gz(symlink先)が含まれていないか確認
+git status --short           # _age_cache_*/ やraw .csv.gz が含まれていないか確認
 git add scripts/output/markov_confirmatory_production_noise01/markov_confirmatory_descriptive_primary.csv \
         scripts/output/markov_confirmatory_production_noise01/markov_confirmatory_results_primary.json \
         scripts/output/markov_confirmatory_production_noise00/markov_confirmatory_descriptive_sensitivity.csv \
@@ -437,4 +431,4 @@ git push -u origin claude/markov-production-analysis
 
 (ファイル名は明示的に列挙 — `git add -A`や`git add .`は使わない。
 `_age_cache_*/`は`.gitignore`で除外済みなので`git status --short`に出ないはず。
-万一raw `.csv.gz`やシンボリックリンク自体が`git status`に出たら、pushせず報告する。)
+万一raw `.csv.gz`が`git status`に出たら、pushせず報告する。)
