@@ -1,0 +1,82 @@
+{
+  "role": "sensitivity",
+  "preregistration_commit": "ccc0b1b7a76f22e150e7c097b1757b1fb8e54e0e",
+  "window": [
+    1000,
+    5000
+  ],
+  "n_seeds": 70,
+  "n_boot_point": 1000,
+  "n_bootstrap_seed": 2000,
+  "point_estimates": {
+    "TFT:S": 0.06699332314047525,
+    "TFT:M": 0.3268230882498215,
+    "TFT:F": 0.09106581868211432,
+    "AllC:S": 0.31453366114976905,
+    "AllC:M": 0.28834387980181525,
+    "AllC:F": 0.33041438280777546,
+    "AllD:S": 0.5511041182009778,
+    "AllD:M": 0.5326216722174463,
+    "AllD:F": 0.45764672994649114
+  },
+  "descriptive_h1_h3_replication": [
+    {
+      "hypothesis": "H1_TFT",
+      "opponent": "TFT",
+      "verdict": "partially supported",
+      "comparisons": [
+        {
+          "label": "r(M)-r(S)",
+          "point_estimate_diff": 0.25982976510934624,
+          "p_value": 0.0004997501249375312,
+          "significant_after_holm": true
+        },
+        {
+          "label": "r(F)-r(S)",
+          "point_estimate_diff": 0.024072495541639066,
+          "p_value": 0.2538730634682659,
+          "significant_after_holm": false
+        }
+      ]
+    },
+    {
+      "hypothesis": "H2_AllD",
+      "opponent": "AllD",
+      "verdict": "not supported",
+      "comparisons": [
+        {
+          "label": "r(S)-r(M)",
+          "point_estimate_diff": 0.018482445983531548,
+          "p_value": 0.3543228385807096,
+          "significant_after_holm": false
+        },
+        {
+          "label": "r(F)-r(M)",
+          "point_estimate_diff": -0.07497494227095514,
+          "p_value": 0.999000499750125,
+          "significant_after_holm": false
+        }
+      ]
+    },
+    {
+      "hypothesis": "H3_AllC",
+      "opponent": "AllC",
+      "verdict": "not supported",
+      "comparisons": [
+        {
+          "label": "r(F)-r(S)",
+          "point_estimate_diff": 0.015880721658006414,
+          "p_value": 0.42528735632183906,
+          "significant_after_holm": false
+        },
+        {
+          "label": "r(F)-r(M)",
+          "point_estimate_diff": 0.042070503005960214,
+          "p_value": 0.18790604697651175,
+          "significant_after_holm": false
+        }
+      ]
+    }
+  ],
+  "note": "role=sensitivity (noise_rate=0.0): preregistration section 6 item 6 -- the 'descriptive_h1_h3_replication' block applies the same statistics as the primary confirmatory test (section 4-5), but is NOT a second confirmatory test and is not subject to the preregistered stopping rule; report descriptively."
+}
