@@ -81,6 +81,29 @@ def build_edges(series_list: Sequence[str], vocab) -> Dict[Tuple[str, str], floa
             for a, b in trans}
 
 
+def self_loop_edges(series_list: Sequence[str], vocab) -> Dict[str, float]:
+    """NEW (not ported): self-loop weights a->a, matching
+    GRA_MAR10feb04Fmarkov_network_with_loops.R's self-transition handling
+    exactly (`build_edges` above deliberately never creates these -- see
+    its docstring, since `itertools.combinations` never pairs a node with
+    itself). A node is self-loop-ELIGIBLE iff its last-2-characters equal
+    its first-2-characters (node[-2:] == node[:2]); for a 3-character
+    node this means all three characters are identical (e.g. "和和和",
+    "底底底"). Its Jaccard weight is always exactly 1.0 by construction
+    (participants-with(a) & participants-with(a) == participants-with(a)
+    -- same formula as build_edges, just with both endpoints equal), and
+    it is only present when the node appears for at least 2 participants
+    (matching the R script's `n_lines > 1` guard)."""
+    word_lines = defaultdict(set)
+    for ln, s in enumerate(series_list):
+        if not s:
+            continue
+        for n in (x.strip().rstrip("。") for x in s.split(",")):
+            if n in vocab:
+                word_lines[n].add(ln)
+    return {node: 1.0 for node, lines in word_lines.items() if node[-2:] == node[:2] and len(lines) > 1}
+
+
 def widest_path_threshold(edges: Dict[Tuple[str, str], float], start: str = "底底底", goal: str = "和和和"):
     """Ported unchanged from markov3_widest_path_reference.py.
 

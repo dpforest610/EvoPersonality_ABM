@@ -11,6 +11,7 @@ from evopersonality_abm.markov_recovery import (
     count_simple_cycles,
     cycle_jstar,
     load_vocab,
+    self_loop_edges,
     series_from_moves,
     strongly_connected_components,
     widest_path_threshold,
@@ -90,6 +91,37 @@ def test_build_edges_jaccard_over_participants():
     assert ("AAB", "ABA") in edges
     # lines(AAB) = {0,1}, lines(ABA) = {0} -> Jaccard = 1/2
     assert edges[("AAB", "ABA")] == pytest.approx(0.5)
+
+
+# ------------------------------------------------------------------ self_loop_edges
+# (exploratory, outside preregistration -- matches
+# GRA_MAR10feb04Fmarkov_network_with_loops.R's self-transition handling,
+# which build_edges deliberately never produces)
+
+def test_self_loop_edges_only_for_triple_repeat_nodes():
+    # "和和和" is eligible (all 3 chars identical); "和惨底" is not
+    vocab = frozenset({"和和和", "和惨底"})
+    series = ["和和和,和惨底。", "和和和。"]
+    loops = self_loop_edges(series, vocab)
+    assert loops == {"和和和": 1.0}
+
+
+def test_self_loop_edges_requires_at_least_two_participants():
+    vocab = frozenset({"和和和"})
+    series = ["和和和。"]  # only 1 participant has it
+    assert self_loop_edges(series, vocab) == {}
+
+
+def test_self_loop_edges_weight_is_always_exactly_one():
+    vocab = frozenset({"底底底"})
+    series = ["底底底。", "底底底。", "底底底。"]
+    assert self_loop_edges(series, vocab) == {"底底底": 1.0}
+
+
+def test_self_loop_edges_ignores_words_outside_vocab():
+    vocab = frozenset({"和惨底"})  # 和和和 not in vocab
+    series = ["和和和,和和和。", "和和和。"]
+    assert self_loop_edges(series, vocab) == {}
 
 
 def test_widest_path_threshold_hand_computed_example():
