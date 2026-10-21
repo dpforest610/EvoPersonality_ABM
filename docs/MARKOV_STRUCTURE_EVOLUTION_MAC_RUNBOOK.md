@@ -432,3 +432,138 @@ git push -u origin claude/markov-production-analysis
 (ファイル名は明示的に列挙 — `git add -A`や`git add .`は使わない。
 `_age_cache_*/`は`.gitignore`で除外済みなので`git status --short`に出ないはず。
 万一raw `.csv.gz`が`git status`に出たら、pushせず報告する。)
+
+---
+
+## 9. Gradualルール修正後の再プローブ(`docs/DEVIATION_gradual_rule.md`)
+
+**対象ブランチ:`claude/markov-production-analysis`(変更なし)。**
+`evopersonality_abm/strategies.py`のGradual・GradualAppeasementの罰の数え方を
+人の実験データに合わせて修正した(`docs/DEVIATION_gradual_rule.md`)。**進化(evolution)は
+やり直さない** — Gradual/GradualAppeasementは進化の適応度計算に使われておらず、固定
+オポネントとしてのプローブにのみ使われるため、Macにある既存のgenotype census
+(`seed_X_probe_age_G_census.csv.gz`、8節までの評価ランで既に生成済み)を再利用し、
+**この2オポネントに対するプローブだけをやり直す**。他の5オポネント(TFT/AllC/AllD/
+Random/WSLS)のプローブ結果・確証的結果(H1〜H3)は一切変更しない。
+
+2段階のスクリプトを使う:
+
+1. `scripts/reprobe_gradual_rule_fix.py` — 既存のcensusを読み、修正済みの
+   Gradual・GradualAppeasementだけを再プローブして、**別ディレクトリ**に
+   `seed_X_probe_age_G_noiseN_moves.csv.gz`/`_summary.csv`(この2オポネントの行のみ)を書く
+   (元の本番データ`scripts/output/markov_sweep_production_noise0{1,0}/`は一切変更しない)。
+2. `scripts/reanalyze_gradual_rule_fix.py` — 1の出力と、既に確定済みの記述的CSV
+   (`markov_confirmatory_descriptive_{primary,sensitivity}.csv`)を読み、Gradual・
+   GradualAppeasementの行だけを再計算して差し替えたCSVと、修正前後の比較CSVを書く
+   (他5オポネントの行・確証的結果のJSONはそのままコピーされるだけで再計算しない)。
+
+どちらも8節と同じ作業フォルダ(venv・raw probe dataが既にある場所)でそのまま使える。
+
+### 9-1. 主条件(ノイズ0.01)の再プローブ・再分析
+
+```bash
+mkdir -p logs
+nohup caffeinate -dimsu bash -c '
+venv/bin/python scripts/reprobe_gradual_rule_fix.py \
+  --data-dir scripts/output/markov_sweep_production_noise01 \
+  --out-dir scripts/output/markov_sweep_production_noise01_gradual_reprobe \
+  --probe-noise-rate 0.01 \
+&& \
+venv/bin/python scripts/reanalyze_gradual_rule_fix.py \
+  --data-dir scripts/output/markov_sweep_production_noise01 \
+  --reprobe-dir scripts/output/markov_sweep_production_noise01_gradual_reprobe \
+  --probe-noise-rate 0.01 \
+  --role primary \
+  --original-descriptive-csv scripts/output/markov_confirmatory_production_noise01/markov_confirmatory_descriptive_primary.csv \
+  --results-dir scripts/output/markov_confirmatory_production_noise01_gradual_fixed \
+&& \
+venv/bin/python scripts/reprobe_gradual_rule_fix.py \
+  --data-dir scripts/output/markov_sweep_production_noise00 \
+  --out-dir scripts/output/markov_sweep_production_noise00_gradual_reprobe \
+  --probe-noise-rate 0.0 \
+&& \
+venv/bin/python scripts/reanalyze_gradual_rule_fix.py \
+  --data-dir scripts/output/markov_sweep_production_noise00 \
+  --reprobe-dir scripts/output/markov_sweep_production_noise00_gradual_reprobe \
+  --probe-noise-rate 0.0 \
+  --role sensitivity \
+  --original-descriptive-csv scripts/output/markov_confirmatory_production_noise00/markov_confirmatory_descriptive_sensitivity.csv \
+  --results-dir scripts/output/markov_confirmatory_production_noise00_gradual_fixed
+' > logs/gradual_rule_fix_both.log 2>&1 &
+disown
+```
+
+(主条件の再プローブ→再分析→感度分析の再プローブ→再分析、の順に1つのバックグラウンド
+ジョブとして続けて実行する。`--data-dir`/`--moves-suffix`相当の`--probe-noise-rate`の
+対応は8-3節と同じ: `markov_sweep_production_noise01/`は`0.01`、`noise00/`は`0.0`。
+すべてのデフォルト値[`--seeds 70 --seed-offset 100 --window-start 1000 --window-end 5000
+--probe-interval 50 --n-boot-descriptive 200 --n-boot-scheme-a 30 --workers 5`など]は
+8節・事前登録と同じなので省略している。)
+
+### 9-2. 所要時間・メモリの見積もり
+
+パイロットデータ(クラウド)での実測([seed,age]単位の処理時間)と、8-4節で実測済みの
+本番group_size=56でのブートストラップ1回あたりコスト(Gradual約1.09ms)を合成した見積もり:
+
+- **再プローブ(`reprobe_gradual_rule_fix.py`)**: 純粋なゲームシミュレーション(ブートストラップなし)。
+  パイロット実測で1 (seed,age)単位あたり約1.5秒。70 seed×81時点=5670単位 ÷ `--workers 5`
+  ≈ **約28分/条件**。
+- **再分析(`reanalyze_gradual_rule_fix.py`)**: 2オポネント分のスキームA(70 seed×30回)
+  +スキームB(3群サイズ×200回)のブートストラップのみ(確証的検定のseedブートストラップは
+  Gradual/GradualAppeasementには元々適用されないので無し)。計算コストはオポネント2つ分
+  (8節の81時点・7オポネント分の約158秒/時点から比例按分)で約15秒/時点、raw moves読み込み
+  I/O(オポネント2/7分なので元の87.5秒/時点から縮小)で約30秒/時点、合計約45秒/時点×81時点
+  ÷ `--workers 5` ≈ **約12分/条件**。
+- **合計**: 約40分/条件(再プローブ約28分+再分析約12分)、**両条件(主・感度分析)で
+  約80分(約1.3時間)**(8節の本来の確証的分析の約1.5時間より短い — オポネント2つ分・
+  確証的ブートストラップ無しのため)。
+- メモリ:8-4節と同様、1GB未満。
+
+本番前に実測で見積もりを更新したい場合は、8-4節と同じ要領で`--window-end`を縮めて
+(例:`--window-end 1100`で3時点のみ)小規模に実行し、かかった時間を時点数で割る。
+
+### 9-3. 進捗・再開
+
+再プローブは`(seed, age)`単位でファイルの有無を見て再開する(8-5節と同様、同じコマンドを
+もう一度打てばよい)。再分析は時点(age)単位で`<results-dir>/_age_cache_<role>_gradual_reprobe/`
+にキャッシュする(`.gitignore`対象)。
+
+```bash
+ps aux | grep -E "reprobe_gradual|reanalyze_gradual" | grep -v grep
+tail -40 logs/gradual_rule_fix_both.log
+```
+
+### 9-4. 結果の確認・図の再生成・push
+
+再分析の結果(`scripts/output/markov_confirmatory_production_noise0{1,0}_gradual_fixed/`)には
+以下が書かれる:
+- `markov_confirmatory_descriptive_{primary,sensitivity}.csv` — 全オポネントの記述的CSV
+  (Gradual・GradualAppeasementの行だけが修正後の値に差し替わっている)
+- `markov_confirmatory_gradual_rule_fix_comparison_{primary,sensitivity}.csv` — 修正前後の
+  値を並べた比較表(`docs/DEVIATION_gradual_rule.md`5項の「修正前の値も並べて報告する」)
+
+8-6節と同じ3つの図スクリプトを、この新しい記述的CSVを指定して再実行すれば、Gradual・
+GradualAppeasementの図だけが更新される(他オポネントの図も再生成されるが、入力データが
+同じなので内容は変わらない):
+
+```bash
+venv/bin/python scripts/plot_markov_confirmatory_trends.py \
+  --descriptive-csv scripts/output/markov_confirmatory_production_noise01_gradual_fixed/markov_confirmatory_descriptive_primary.csv \
+  --role primary --out-dir scripts/output/figures
+# plot_markov_confirmatory_sampling_comparison.py / analyze_markov_confirmatory_regime_correspondence.py も同様
+# (--role sensitivity の場合はnoise01→noise00に読み替え)
+```
+
+pushするファイル(新規追加分。再プローブの生データ・再分析のageキャッシュは`.gitignore`対象):
+
+```bash
+git branch --show-current   # claude/markov-production-analysis を確認
+git status --short
+git add scripts/output/markov_confirmatory_production_noise01_gradual_fixed/markov_confirmatory_descriptive_primary.csv \
+        scripts/output/markov_confirmatory_production_noise01_gradual_fixed/markov_confirmatory_gradual_rule_fix_comparison_primary.csv \
+        scripts/output/markov_confirmatory_production_noise00_gradual_fixed/markov_confirmatory_descriptive_sensitivity.csv \
+        scripts/output/markov_confirmatory_production_noise00_gradual_fixed/markov_confirmatory_gradual_rule_fix_comparison_sensitivity.csv \
+        scripts/output/figures/markov_confirmatory_*.png
+git commit -m "Gradual rule fix: re-probed Gradual/GradualAppeasement descriptive results (primary + sensitivity)"
+git push -u origin claude/markov-production-analysis
+```

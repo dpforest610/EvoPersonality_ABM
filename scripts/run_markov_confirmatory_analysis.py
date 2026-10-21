@@ -117,16 +117,26 @@ def process_one_age(
     human_weights_path: str, n_boot_point: int, n_boot_descriptive: int, n_boot_scheme_a: int,
     n_bootstrap_seed: int, master_seed: str, group_for_human: Dict[str, int],
     cycle_thresholds: Optional[List[float]] = None,
+    opponents: Optional[List[str]] = None,
+    pools: Optional[Dict[int, dict]] = None,
 ) -> dict:
+    """opponents/pools let a caller restrict which opponents are processed
+    and supply an already-built seed_pools dict instead of loading one from
+    data_dir_str/moves_suffix -- used by scripts/reanalyze_gradual_rule_fix.py
+    to recompute only Gradual/GradualAppeasement from a separate re-probe
+    directory, without touching the other 5 opponents' data. Both default to
+    the original full-pipeline behavior when omitted."""
     data_dir = Path(data_dir_str)
     human_weights = load_human_weights(Path(human_weights_path))
-    pools = load_seed_pools_for_age(data_dir, moves_suffix, age, seeds)
+    if pools is None:
+        pools = load_seed_pools_for_age(data_dir, moves_suffix, age, seeds)
+    opponents = opponents if opponents is not None else ALL_OPPONENTS
 
     descriptive_rows: List[dict] = []
     # seed_boot_contributions[(iteration, opponent, human_group)] = corr (or None)
     seed_boot_contributions: List[Tuple[int, str, str, Optional[float]]] = []
 
-    for opponent in ALL_OPPONENTS:
+    for opponent in opponents:
         label, vocab_name = OPPONENT_INFO[opponent]
         vocab = load_vocab(vocab_name)
         human_weights_by_group = (
