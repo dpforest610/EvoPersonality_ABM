@@ -567,3 +567,101 @@ git add scripts/output/markov_confirmatory_production_noise01_gradual_fixed/mark
 git commit -m "Gradual rule fix: re-probed Gradual/GradualAppeasement descriptive results (primary + sensitivity)"
 git push -u origin claude/markov-production-analysis
 ```
+
+---
+
+## 10. 記憶の深さの網(探索的・事前登録外)
+
+**対象ブランチ:`claude/markov-production-analysis`。** 人の論文(JOEP、N=171)と同じ方式・
+同じ見た目で、3ステップのマルコフ網が「記憶の深さ」とともにどう変わるかを見る分析。
+愛着の3群の代わりに、有効な記憶の深さ(`evopersonality_abm.lindgren.effective_memory_depth`、
+表を振る舞いを変えずに縮められる最小の深さ)で3群(浅い・中・深い)に分ける。GradualはDEVIATION_gradual_rule.mdの
+修正後の規則で再プローブしたデータ(`scripts/reprobe_gradual_rule_fix.py`の出力)を使う
+— **9節の再プローブが済んでから**着手すること。
+
+### 10-1. R用の入力ファイルの書き出し(Mac)
+
+```bash
+venv/bin/python scripts/export_depth_groups_for_r.py \
+  --data-dir scripts/output/markov_sweep_production_noise01 \
+  --gradual-reprobe-dir scripts/output/markov_sweep_production_noise01_gradual_reprobe \
+  --moves-suffix noise0p01 \
+  --out-dir scripts/output/markov_depth_groups
+```
+
+(すべてのデフォルト値[`--seeds 70 --seed-offset 100 --window-start 1000 --window-end 5000
+--probe-interval 50 --group-size 56`など]は事前登録の主条件・分析窓に合わせてある。)
+
+実行すると:
+1. まず`scripts/output/markov_depth_groups/depth_distribution_by_generation.csv`に、
+   世代ごとの表面上の深さ・有効な深さの分布(頻度重み付き)を書く。
+2. 続けて、観測された有効な深さの値を3つの連続範囲(浅い・中・深い)に分ける区切りを、
+   各群が`--group-size`(既定56)人分の**別々のseed**を確保できることを条件に自動提案し、
+   標準出力に表示する(例:`proposed cutpoints: Low<=2, 3<=Mid<=3, High>=4`)。
+   本番データでこの提案を見てから、必要なら`--depth-cutpoints "D1,D2"`で上書きして
+   再実行できる(例:`--depth-cutpoints "2,4"`)。
+3. 各群56人を選び(別々のseedを優先、足りない場合のみ同じseedの別時点を使う)、
+   `scripts/output/markov_depth_groups/`に`TFT_depthLow.txt`・`GRA_depthMid.txt`などの
+   5オポネント×3群=15個のテキストファイルと、各人のseed・世代・有効な深さの一覧
+   (`depth_group_participants.csv`)を書く。
+
+**所要時間の見積もり**(パイロットでの実測ベース):census走査(Phase 1)は70 seed×81時点で
+約6分。系列抽出(Phase 2、並列化なし・単一プロセス)は選ばれた参加者が属する
+(seed, 時点)の組ごとにraw movesファイルを1回ずつ読む必要があり、1ファイルあたり実測
+約4.4秒 — 3群×56人=最大168組として**約12分**。**合計で約18分**(提案された区切りの
+確認・`--depth-cutpoints`での再実行が必要な場合はその分追加)。メモリは1GB未満。
+
+### 10-2. R の実行(Windows でも Mac でも)
+
+1. `docs/r_scripts/GRA_MAR10feb04Fmarkov_network_with_loops_param_groups.R`・
+   `docs/r_scripts/draw_all_opponents_depth_groups.R`・`docs/r_scripts/vocab/`の5つの
+   予約語ファイルを、10-1の出力(`TFT_depthLow.txt`など15個のテキストファイル)と
+   **同じフォルダ**にコピーする。
+2. Rとパッケージ`igraph`・`tidyverse`がインストールされていることを確認する
+   (`install.packages(c("igraph","tidyverse"))`)。
+3. `draw_all_opponents_depth_groups.R`を開き、`work_dir`をそのフォルダの絶対パスに
+   変更してから実行する(Rコンソールで`source("draw_all_opponents_depth_groups.R")`、
+   またはコマンドラインで`Rscript draw_all_opponents_depth_groups.R`)。
+4. TFT・GRA・RAN・ALC・ALDの5オポネント分、`<日時>_markov_network_3groups_<OPPONENT>_j030_with_loops.png`
+   という名前のPNGが同じフォルダに出力される(各PNGは浅い・中・深い群の3パネル)。
+
+(このRスクリプトは本セッションの環境にRが無いため実行確認していない — まず1オポネント分
+[`GRA_MAR10feb04Fmarkov_network_with_loops_param_groups.R`単体を`OPPONENT <- "GRA"`のまま
+手動で`source`]で問題なく動くことを確認してから、`draw_all_opponents_depth_groups.R`で
+5オポネント分を一括実行することを推奨する。描画ロジック自体は元のOSFコードアーカイブの
+スクリプトから一切変更していない[変更箇所はグループ名の3箇所のみ、コミットメッセージに
+diffで検証済みと明記]。)
+
+### 10-3. Python版の図(有効な深さ1〜6、Mac)
+
+```bash
+venv/bin/python scripts/plot_markov_depth_networks.py \
+  --data-dir scripts/output/markov_sweep_production_noise01 \
+  --gradual-reprobe-dir scripts/output/markov_sweep_production_noise01_gradual_reprobe \
+  --moves-suffix noise0p01 \
+  --out-dir scripts/output/figures
+```
+
+オポネントごとに`markov_depth_networks_<opponent>.png`(有効な深さ1〜6の6パネル、
+Jaccard≥.30、自己ループあり、赤=6パネルすべてに共通の辺・青=その深さ特有の辺)を書く。
+
+**所要時間の見積もり**:10-1と同じPhase 1(約6分)+ Phase 2(今回は深さ1〜6の6群、
+最大6×56=336組の(seed,時点)ペア、単一プロセスで約4.4秒/ファイル ≈ **約25分**)。
+**合計で約31分**。メモリは1GB未満。
+
+### 10-4. 結果のpush
+
+```bash
+git branch --show-current   # claude/markov-production-analysis を確認
+git status --short
+git add scripts/output/markov_depth_groups/depth_distribution_by_generation.csv \
+        scripts/output/markov_depth_groups/depth_group_participants.csv \
+        scripts/output/figures/markov_depth_networks_*.png
+git commit -m "Memory-depth network analysis: distribution report, participant lists, Python figures"
+git push -u origin claude/markov-production-analysis
+```
+
+(`TFT_depthLow.txt`などのR入力テキストファイルと、Rが出力するPNGは、人の論文の実際の
+3-gram系列相当のデータを含む中間生成物であり軽量なので任意でpushしてよいが、必須では
+ない — 再現したい場合は10-1を再実行すれば同じ`--master-seed`から同じファイルが得られる。
+Rで生成したPNGをpushする場合は`scripts/output/figures/`に移してから`git add`に加える。)
