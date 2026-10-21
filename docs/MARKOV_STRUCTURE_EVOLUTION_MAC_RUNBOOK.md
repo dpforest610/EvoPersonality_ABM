@@ -665,3 +665,90 @@ git push -u origin claude/markov-production-analysis
 3-gram系列相当のデータを含む中間生成物であり軽量なので任意でpushしてよいが、必須では
 ない — 再現したい場合は10-1を再実行すれば同じ`--master-seed`から同じファイルが得られる。
 Rで生成したPNGをpushする場合は`scripts/output/figures/`に移してから`git add`に加える。)
+
+---
+
+## 11. Jaccard閾値×世代のHTMLビューア(探索的・事前登録外)
+
+**対象ブランチ:`claude/markov-production-analysis`。** 人(N=171)とABMの3ステップマルコフ網を、
+Jaccard閾値と世代の2軸で動かしながら比較する、ブラウザで開ける1枚のHTMLビューア
+(`scripts/output/figures/markov_edge_weight_viewer.html`)。**10節の記憶の深さの区切り
+(`--depth-cutpoints`で提案・決定した値)が済んでから**着手すること。
+
+### 11-1. 辺の重みの書き出し(Mac)
+
+```bash
+venv/bin/python scripts/export_markov_edge_weights_for_viewer.py \
+  --data-dir scripts/output/markov_sweep_production_noise01 \
+  --gradual-reprobe-dir scripts/output/markov_sweep_production_noise01_gradual_reprobe \
+  --moves-suffix noise0p01 \
+  --probe-noise-rate 0.01 \
+  --depth-cutpoints "D1,D2" \
+  --out-path scripts/output/figures/markov_edge_weights.json
+```
+
+(`--depth-cutpoints`は10節で使ったのと**同じ**値を指定する(浅い・中・深いの区切りを
+両方の出力で揃えるため)。それ以外のデフォルト値[`--seeds 70 --seed-offset 100
+--generations-start 0 --generations-end 5000 --probe-interval 50 --group-size 56
+--n-draws 200 --workers 5`など]は依頼どおり。`--gradual-reprobe-dir`は9節の再プローブが
+**gen 0〜5000の全時点**をカバーしていない場合[9節の既定はgen 1000〜5000のみ]、Gradualの
+ネットワークはgen 1000未満の時点で欠落する[ビューア上は「データなし」として扱われる —
+エラーにはならない]。gen 0〜5000全体でGradualも見たい場合は、9節の`reprobe_gradual_rule_fix.py`を
+`--window-start 0 --window-end 5000`で追加実行してから、このスクリプトを実行すること。)
+
+**所要時間の見積もり**(8-4節・10-1節の実測ベースの推定):101時点(gen 0〜5000、50世代おき)
+×70 seed×2ファイル(主データ+Gradual再プローブ)を読む必要があり、1時点あたりのI/Oは
+8-4節で確立した主データの約87.5秒に、Gradual再プローブ分(軽量、2オポネント分のみ)の
+約30〜40秒を加えて約120〜130秒/時点。計算(5オポネント×4群×200回のブートストラップ)は
+1時点あたり数秒と軽い。101時点÷`--workers 5` ≈ **約42〜45分**。年代ごとにpickleキャッシュ
+するので(`_age_cache_edge_weights/`、`.gitignore`対象)、中断しても同じコマンドで再開できる。
+
+**出力サイズの見積もり**(スクリプトのdocstringに詳細):64ノードのオポネントは1ノードあたり
+最大4つの遷移先+自己ループ1つなので最大約5×64=320通りの辺。4つの群の作り方×5オポネント×
+101時点×最大320通り ≈ 上限約65万行(多くの時点・群では閾値以前の段階でもっと少ない)。
+JSONファイル全体でおよそ**10〜30MB**程度を見込む。
+
+### 11-2. (任意)Rのノード配置をビューアに読み込ませる
+
+デフォルトでは規則的な格子配置だが、論文と同じ力学的レイアウトを使いたい場合:
+
+1. `docs/r_scripts/GRA_MAR10feb04Fmarkov_network_with_loops_export_layout.R`を、
+   人の3群のテキストファイル・予約語ファイルと同じフォルダに置いて、オポネントごとに
+   (`OPPONENT <- "TFT"`などに変更して)実行する — 各回`<OPPONENT>_layout.csv`
+   (例:`TFT_layout.csv`、列: node,x,y)が出力される。
+2. 5オポネント分の`<CODE>_layout.csv`(TFT・GRA・RAN・ALC・ALD)を
+   `scripts/output/figures/`(`markov_edge_weight_viewer.html`と同じフォルダ)にコピーする。
+   ビューアは起動時に自動でこれらを探し、見つかった分だけ使う(無ければ格子配置にフォール
+   バックする、エラーにはならない)。
+
+### 11-3. HTMLの開き方
+
+ビューアは起動時に同じフォルダの`markov_edge_weights.json`を`fetch`で読み込むため、
+**HTMLファイルを`file://`で直接ダブルクリックして開くと、ブラウザのCORS制限により
+読み込みに失敗する**(ブラウザのJavaScriptコンソールにエラーが出る)。
+`scripts/output/figures/`フォルダで簡易ローカルサーバーを立てて開くこと(外部には一切
+通信しない、同じマシン内のローカルサーバー):
+
+```bash
+cd scripts/output/figures
+python3 -m http.server 8000
+```
+
+ブラウザで`http://localhost:8000/markov_edge_weight_viewer.html`を開く(Mac・Windows
+どちらでも、ブラウザとPython 3があれば同じ手順でよい)。使い終わったら`Ctrl+C`でサーバーを
+止める。
+
+### 11-4. 結果のpush
+
+```bash
+git branch --show-current   # claude/markov-production-analysis を確認
+git status --short
+git add scripts/output/figures/markov_edge_weights.json \
+        scripts/output/figures/markov_edge_weight_viewer.html \
+        scripts/output/figures/*_layout.csv
+git commit -m "Markov edge-weight viewer: production edge-weight JSON (+ optional R layouts)"
+git push -u origin claude/markov-production-analysis
+```
+
+(`markov_edge_weights.json`は10〜30MB程度見込みなので、pushに時間がかかる場合がある。
+`_age_cache_edge_weights/`は`.gitignore`対象なので`git status --short`に出ないはず。)
