@@ -1,7 +1,7 @@
 # 逸脱の記録:Gradualの罰の数え方の修正(事前登録8節に基づく)
 
 - 状態:**確定**
-- 確定コミット:(このファイルの直後のコミットで記録)
+- 確定コミット:`6f4ab3dc6ecafee8fd67192887efec61f5bd767c`(2026-10-21T08:00:21+00:00)
 - 対象:`evopersonality_abm/strategies.py`の`make_gradual_strategy`
   (`docs/MARKOV_STRUCTURE_EVOLUTION_DESIGN.md`2.3.1節、2026-10-16確定の実装設計からの逸脱)
 - 決定時点:**本番データ(進化結果・確証的結果)を見た後**。ただし下記「確証的結果への影響」のとおり、
