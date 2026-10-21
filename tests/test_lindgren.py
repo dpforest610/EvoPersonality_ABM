@@ -9,6 +9,7 @@ from evopersonality_abm.lindgren import (
     always_cooperate_table,
     always_defect_table,
     duplicate_memory,
+    effective_memory_depth,
     pavlov_table,
     point_mutate,
     split_memory,
@@ -332,3 +333,58 @@ def test_point_mutated_tft_diverges_only_where_the_flipped_entry_applies():
     own_before = a.history_self[:first_diff]
     opp_before = pattern[:first_diff]
     assert original._table_index(own_before, opp_before) == mutated_index
+
+
+# ------------------------------------------------------------------ effective_memory_depth
+
+def test_effective_memory_depth_of_depth_zero_table_is_zero():
+    t = LindgrenTable(0, [1], [])
+    assert effective_memory_depth(t) == 0
+
+
+def test_effective_memory_depth_of_tft_equals_its_nominal_depth():
+    assert effective_memory_depth(tit_for_tat_table()) == 1
+
+
+def test_effective_memory_depth_of_always_cooperate_is_zero():
+    """always_cooperate_table has memory_depth=1 but never actually
+    consults it -- every entry is 1 (cooperate)."""
+    assert effective_memory_depth(always_cooperate_table()) == 0
+
+
+def test_effective_memory_depth_of_always_defect_is_zero():
+    assert effective_memory_depth(always_defect_table()) == 0
+
+
+def test_duplicate_memory_never_increases_effective_depth():
+    """duplicate_memory is neutral by construction, so folding must
+    recover the original effective depth regardless of how many times
+    the table was duplicated first."""
+    tft = tit_for_tat_table()
+    once = duplicate_memory(tft)
+    twice = duplicate_memory(once)
+    assert once.memory_depth == 2
+    assert twice.memory_depth == 3
+    assert effective_memory_depth(once) == 1
+    assert effective_memory_depth(twice) == 1
+
+
+def test_point_mutation_at_the_oldest_round_raises_effective_depth():
+    """A point mutation that makes the decision depend on the oldest
+    remembered round prevents folding back down -- effective depth must
+    rise to (at least) the table's full nominal depth."""
+    tft3 = duplicate_memory(duplicate_memory(tit_for_tat_table()))
+    assert effective_memory_depth(tft3) == 1  # still foldable before mutation
+    mutated = point_mutate(tft3, 0)
+    assert effective_memory_depth(mutated) == 3
+
+
+def test_effective_memory_depth_never_exceeds_nominal_depth():
+    for table in (
+        tit_for_tat_table(),
+        always_cooperate_table(),
+        always_defect_table(),
+        pavlov_table(),
+        duplicate_memory(tit_for_tat_table()),
+    ):
+        assert effective_memory_depth(table) <= table.memory_depth
