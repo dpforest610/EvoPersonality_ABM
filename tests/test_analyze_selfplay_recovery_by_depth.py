@@ -261,10 +261,49 @@ def test_plot_academic_figure_title_and_legend_per_opponent(tmp_path):
         ("SELF", "底からの回復:仲間(SELF)相手"),
         ("POP", "底からの回復:同じ集団(POP)相手"),
         ("WSLS", "底からの回復:WSLS相手"),
+        ("TFT", "底からの回復:TFT相手"),
     ]:
         out_path = tmp_path / f"academic_{opponent}.png"
-        mod.plot_academic_figure(opponent, by_depth, per_seed, tft_per_seed_pooled, pooled, n_boot=50, rng=random.Random(0), out_path=out_path)
+        mod.plot_academic_figure(
+            opponent, by_depth, per_seed, tft_per_seed_pooled, pooled, n_boot=50, rng=random.Random(0), out_path=out_path,
+            show_tft_reference=(opponent != "TFT"),
+        )
         ax = plt.gcf().axes[0]
         assert ax.get_title() == expected_title
         assert ax.get_legend()._get_loc() == 2  # matplotlib's internal code for "upper left"
         plt.close("all")
+
+
+def test_plot_academic_figure_tft_never_shows_its_own_reference_line(tmp_path):
+    # the function guards against opponent=="TFT" drawing a TFT-vs-itself
+    # reference line regardless of the show_tft_reference flag's value --
+    # callers don't need to remember to pass False for TFT specifically.
+    import matplotlib.pyplot as plt
+
+    by_depth, per_seed, pooled = _make_depth_fixture()
+    tft_per_seed_pooled = mod.tft_pooled_per_seed(per_seed)
+    for show_flag in (False, True):
+        out_path = tmp_path / f"academic_tft_{show_flag}.png"
+        mod.plot_academic_figure(
+            "TFT", by_depth, per_seed, tft_per_seed_pooled, pooled, n_boot=50, rng=random.Random(0),
+            out_path=out_path, show_tft_reference=show_flag,
+        )
+        ax = plt.gcf().axes[0]
+        labels = [t.get_text() for t in ax.get_legend().get_texts()]
+        assert mod.TFT_REFERENCE_LABEL not in labels
+        assert len(labels) == 3
+        plt.close("all")
+
+
+def test_plot_academic_figure_self_has_the_tft_reference_line_by_default(tmp_path):
+    import matplotlib.pyplot as plt
+
+    by_depth, per_seed, pooled = _make_depth_fixture()
+    tft_per_seed_pooled = mod.tft_pooled_per_seed(per_seed)
+    out_path = tmp_path / "academic_self.png"
+    mod.plot_academic_figure("SELF", by_depth, per_seed, tft_per_seed_pooled, pooled, n_boot=50, rng=random.Random(0), out_path=out_path)
+    ax = plt.gcf().axes[0]
+    labels = [t.get_text() for t in ax.get_legend().get_texts()]
+    assert mod.TFT_REFERENCE_LABEL in labels
+    assert len(labels) == 4
+    plt.close("all")

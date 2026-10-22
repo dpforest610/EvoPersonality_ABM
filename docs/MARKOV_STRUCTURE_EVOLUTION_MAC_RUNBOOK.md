@@ -991,9 +991,10 @@ venv/bin/python scripts/analyze_selfplay_recovery_by_depth.py \
 (`--pooled-csv`は12節で作った`markov_selfplay_recovery_time.csv`——変更不要、既にリポジトリに
 ある。実行すると、既存の`markov_selfplay_recovery_self_vs_tft_by_depth.png`(5節・元の図、
 **変更なし**で再生成されるだけ)に加え、新しく`markov_selfplay_recovery_rate_by_depth_academic_
-{SELF,POP,WSLS}.png`の3枚が書き出される。所要時間は数秒(対戦シミュレーションを行わず、
-既存のCSVを読んでブートストラップ[seedブートストラップ2000回×3群×2時点種×3相手]と
-作図を行うだけ)。)
+{SELF,POP,WSLS,TFT}.png`の4枚が書き出される(TFT自身の図にはTFT参考線を重ねない——
+自分自身を参考線にしても意味がないため、`show_tft_reference=False`相当の扱いになる)。
+所要時間は数秒(対戦シミュレーションを行わず、既存のCSVを読んでブートストラップ
+[seedブートストラップ2000回×3群×2時点種×4相手]と作図を行うだけ)。)
 
 **フォントについて**:このスクリプトは起動時に、実行しているマシンにヒラギノ角ゴ
 (`Hiragino Sans`・`Hiragino Kaku Gothic ProN`・`Hiragino Kaku Gothic Pro`のいずれか)が
@@ -1013,6 +1014,8 @@ venv/bin/python scripts/analyze_selfplay_recovery_by_depth.py \
 - `scripts/output/figures/markov_selfplay_recovery_rate_by_depth_academic_SELF.png`(新規)
 - `scripts/output/figures/markov_selfplay_recovery_rate_by_depth_academic_POP.png`(新規)
 - `scripts/output/figures/markov_selfplay_recovery_rate_by_depth_academic_WSLS.png`(新規)
+- `scripts/output/figures/markov_selfplay_recovery_rate_by_depth_academic_TFT.png`(新規、
+  TFT参考線なし)
 - `scripts/output/figures/markov_selfplay_recovery_self_vs_tft_by_depth.png`(再生成されるが
   **内容は変わらないはず**——元の図として残す依頼どおり、別ファイル名の新しい図を追加した
   だけで、このファイル自体は上書きしても同じ内容になる)
@@ -1023,8 +1026,9 @@ git status --short
 git add scripts/output/figures/markov_selfplay_recovery_time_by_depth_per_seed.csv \
         scripts/output/figures/markov_selfplay_recovery_rate_by_depth_academic_SELF.png \
         scripts/output/figures/markov_selfplay_recovery_rate_by_depth_academic_POP.png \
-        scripts/output/figures/markov_selfplay_recovery_rate_by_depth_academic_WSLS.png
-git commit -m "Academic-style recovery-rate-by-depth figures (SELF/POP/WSLS, bootstrap bands, Hiragino)"
+        scripts/output/figures/markov_selfplay_recovery_rate_by_depth_academic_WSLS.png \
+        scripts/output/figures/markov_selfplay_recovery_rate_by_depth_academic_TFT.png
+git commit -m "Academic-style recovery-rate-by-depth figures (SELF/POP/WSLS/TFT, bootstrap bands, Hiragino)"
 git push -u origin claude/markov-production-analysis
 ```
 

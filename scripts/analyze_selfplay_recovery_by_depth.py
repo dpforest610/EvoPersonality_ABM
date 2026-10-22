@@ -88,7 +88,7 @@ ACADEMIC_LEGEND_ORDER = ["depthHigh", "depthMid", "depthLow"]  # legend row orde
 TFT_REFERENCE_LABEL = "TFT相手(参考)"
 
 # section 6.6's revised title wording per focal opponent
-ACADEMIC_TITLE_LABEL = {"SELF": "仲間(SELF)", "POP": "同じ集団(POP)", "WSLS": "WSLS"}
+ACADEMIC_TITLE_LABEL = {"SELF": "仲間(SELF)", "POP": "同じ集団(POP)", "WSLS": "WSLS", "TFT": "TFT"}
 ACADEMIC_BAND_CAPTION = "帯はseedをまたいだブートストラップの95%範囲"
 
 HIRAGINO_CANDIDATES = ["Hiragino Sans", "Hiragino Kaku Gothic ProN", "Hiragino Kaku Gothic Pro"]
@@ -282,10 +282,14 @@ def plot_academic_figure(
     n_boot: int,
     rng: random.Random,
     out_path: Path,
+    show_tft_reference: bool = True,
 ) -> None:
-    """Section 6.5: recovered rate (not never_recovered_rate) by depth
+    """Section 6.5/6.6: recovered rate (not never_recovered_rate) by depth
     group for `opponent`, each line with a shaded seed-bootstrap 95%
-    band, plus the pooled TFT reference line (also banded). Legend
+    band, plus the pooled TFT reference line (also banded) -- SELF/POP/
+    WSLS are each shown against it. show_tft_reference=False (used for
+    opponent="TFT" itself, see main()) omits that reference line, since
+    TFT has no natural baseline of its own in this dataset. Legend
     wording and order exactly as requested."""
     fig, ax = plt.subplots(figsize=(9, 5))
 
@@ -301,24 +305,27 @@ def plot_academic_figure(
         ax.fill_between(ages, los, his, color=GROUP_COLOR[g], alpha=0.15, linewidth=0)
         ax.plot(ages, points, label=ACADEMIC_LEGEND_LABEL[g], color=GROUP_COLOR[g], linewidth=2)
 
-    tft_ages = sorted(pooled["TFT"])
-    tft_points = [1 - float(pooled["TFT"][age]["never_recovered_rate"]) for age in tft_ages]
-    tft_los, tft_his = [], []
-    for age in tft_ages:
-        band = seed_bootstrap_recovered_rate(tft_per_seed_pooled[age], n_boot, rng)
-        lo, hi = band if band is not None else (tft_points[tft_ages.index(age)],) * 2
-        tft_los.append(lo)
-        tft_his.append(hi)
-    ax.fill_between(tft_ages, tft_los, tft_his, color="gray", alpha=0.12, linewidth=0)
-    ax.plot(tft_ages, tft_points, label=TFT_REFERENCE_LABEL, color="gray", alpha=0.5, linewidth=1.5, linestyle="--")
+    draw_tft_reference = show_tft_reference and opponent != "TFT"  # never plot TFT against itself
+    if draw_tft_reference:
+        tft_ages = sorted(pooled["TFT"])
+        tft_points = [1 - float(pooled["TFT"][age]["never_recovered_rate"]) for age in tft_ages]
+        tft_los, tft_his = [], []
+        for age in tft_ages:
+            band = seed_bootstrap_recovered_rate(tft_per_seed_pooled[age], n_boot, rng)
+            lo, hi = band if band is not None else (tft_points[tft_ages.index(age)],) * 2
+            tft_los.append(lo)
+            tft_his.append(hi)
+        ax.fill_between(tft_ages, tft_los, tft_his, color="gray", alpha=0.12, linewidth=0)
+        ax.plot(tft_ages, tft_points, label=TFT_REFERENCE_LABEL, color="gray", alpha=0.5, linewidth=1.5, linestyle="--")
 
     ax.set_xlabel("世代")
     ax.set_ylabel("20回のうちに和和和へ戻れた割合")
     ax.set_title(f"底からの回復:{ACADEMIC_TITLE_LABEL[opponent]}相手")
     ax.set_ylim(0, 1.0)
     handles, labels = ax.get_legend_handles_labels()
-    order = ACADEMIC_LEGEND_ORDER + ["_tft"]
-    label_order = [ACADEMIC_LEGEND_LABEL[g] for g in ACADEMIC_LEGEND_ORDER] + [TFT_REFERENCE_LABEL]
+    label_order = [ACADEMIC_LEGEND_LABEL[g] for g in ACADEMIC_LEGEND_ORDER]
+    if draw_tft_reference:
+        label_order = label_order + [TFT_REFERENCE_LABEL]
     ordered = sorted(zip(handles, labels), key=lambda hl: label_order.index(hl[1]))
     ax.legend([h for h, _ in ordered], [l for _, l in ordered], loc="upper left", fontsize=9)
     ax.grid(alpha=0.2)
@@ -333,7 +340,7 @@ def main():
     p.add_argument("--by-depth-csv", type=str, default="scripts/output/figures/markov_selfplay_recovery_time_by_depth.csv")
     p.add_argument("--pooled-csv", type=str, default="scripts/output/figures/markov_selfplay_recovery_time.csv")
     p.add_argument("--per-seed-csv", type=str, default="scripts/output/figures/markov_selfplay_recovery_time_by_depth_per_seed.csv")
-    p.add_argument("--academic-opponents", type=str, default="SELF,POP,WSLS", help="comma-separated focal opponents to make an academic figure for")
+    p.add_argument("--academic-opponents", type=str, default="SELF,POP,WSLS,TFT", help="comma-separated focal opponents to make an academic figure for -- TFT LAST by default so its figure's own bootstrap draws don't shift SELF/POP/WSLS's (shared rng stream)")
     p.add_argument("--n-boot", type=int, default=2000, help="seed-bootstrap draws, matching this project's established confirmatory-analysis convention")
     p.add_argument("--boot-seed", type=str, default="markov_selfplay_recovery_by_depth_bootstrap_v1")
     p.add_argument("--out-dir", type=str, default="scripts/output/figures")
@@ -355,6 +362,7 @@ def main():
         plot_academic_figure(
             opponent, by_depth, per_seed, tft_per_seed_pooled, pooled, args.n_boot, rng,
             out_dir / f"markov_selfplay_recovery_rate_by_depth_academic_{opponent}.png",
+            show_tft_reference=(opponent != "TFT"),
         )
 
 

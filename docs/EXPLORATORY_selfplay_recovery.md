@@ -357,7 +357,11 @@ memory_depth_evolution_50seed.png`で既に確認されている傾向)のに伴
 4. **凡例の文言**:depthHigh→「記憶が深い」、depthMid→「中くらい」、depthLow→「浅い」、
    TFT参考線→「TFT相手(参考)」に変更した(この順で表示)。
 5. **POP・WSLSの図も追加**:SELFと同じ構成(3つの深さ群+TFT参考線)で、POP相手・WSLS相手
-   それぞれの図を作った。
+   それぞれの図を作った。さらにその後、**TFT相手自身の図も追加**で依頼された
+   (`markov_selfplay_recovery_rate_by_depth_academic_TFT.png`)——この図にはTFT参考線を
+   重ねない(自分自身を参考線にしても意味がないため、`plot_academic_figure`の
+   `show_tft_reference`引数で制御。関数内部でも`opponent=="TFT"`なら常にスキップする
+   ガードを入れてあり、呼び出し側の指定ミスでTFT対TFTの参考線が紛れ込むことはない)。
 
 その後、本番データで図を確認したうえで、さらに2点の見た目の調整を依頼された(本節の図は
 この版が最終):
@@ -388,6 +392,15 @@ seedごとの内訳、本番primary条件)。図は`scripts/output/figures/marko
 ブートストラップの精度では統計的に明確と言い切れない。深さが深い群(depthHigh/depthMid)
 でのTFTとの差は、点推定の差が大きいため(6.4.1節)、明確に分かれている。
 
-コードは`tests/test_analyze_selfplay_recovery_by_depth.py`19件(題名・凡例位置の検証を含む)・
-単体テスト・パイロットデータでの一気通貫のスモークテストで検証済み。本番データ
-(IPAGothicフォールバックでの再現)でも同じ傾向を確認した。
+**TFT相手自身の図**(`markov_selfplay_recovery_rate_by_depth_academic_TFT.png`)では、
+3つの深さ群はいずれも世代を通じて0.1〜0.2程度の低い回復率にとどまり、95%帯は常に重なって
+いる(例:gen5000でdepthHigh=0.180[0.113,0.256]・depthLow=0.129[0.076,0.205])——SELF・
+POP・WSLSで見られた「深い群ほど回復しやすい」という分離は、TFT相手に対しては
+ブートストラップの精度でも点推定でも確認できない(6.4.1節の平均値、depthLow=0.880・
+depthMid=0.864・depthHigh=0.853もこの近さと整合する)。TFTの構造的な非回復性(5.4節)は
+記憶の深さによらず一様であることが、この図でも裏付けられる。
+
+コードは`tests/test_analyze_selfplay_recovery_by_depth.py`21件(題名・凡例位置・TFT自身の
+図に参考線が出ないことの検証を含む)・単体テスト・パイロットデータでの一気通貫の
+スモークテストで検証済み。本番データ(IPAGothicフォールバックでの再現)でも
+同じ傾向を確認した。
