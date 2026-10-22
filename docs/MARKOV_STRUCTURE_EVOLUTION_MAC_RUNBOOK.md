@@ -975,6 +975,11 @@ disown
 
 ### 14-2. 図の生成(Mac — ヒラギノ角ゴを使うにはMacで実行する必要がある)
 
+**図の見た目を直した版(凡例を左上に・題名を相手ごとの文言に・帯の注記を追加)が
+pushされた。元データ(14-1、`markov_selfplay_recovery_time_by_depth_per_seed.csv`など)は
+変わっていないので、**このブランチを`git pull`したあと、以下のコマンドを
+もう一度実行するだけでよい(14-1を再実行する必要はない)**。
+
 ```bash
 venv/bin/python scripts/analyze_selfplay_recovery_by_depth.py \
   --by-depth-csv scripts/output/figures/markov_selfplay_recovery_time_by_depth.csv \

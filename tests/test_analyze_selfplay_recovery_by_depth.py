@@ -250,3 +250,21 @@ def test_plot_academic_figure_writes_a_png_without_crashing(tmp_path):
     mod.plot_academic_figure("SELF", by_depth, per_seed, tft_per_seed_pooled, pooled, n_boot=50, rng=random.Random(0), out_path=out_path)
     assert out_path.exists()
     assert out_path.stat().st_size > 0
+
+
+def test_plot_academic_figure_title_and_legend_per_opponent(tmp_path):
+    import matplotlib.pyplot as plt
+
+    by_depth, per_seed, pooled = _make_depth_fixture()
+    tft_per_seed_pooled = mod.tft_pooled_per_seed(per_seed)
+    for opponent, expected_title in [
+        ("SELF", "底からの回復:仲間(SELF)相手"),
+        ("POP", "底からの回復:同じ集団(POP)相手"),
+        ("WSLS", "底からの回復:WSLS相手"),
+    ]:
+        out_path = tmp_path / f"academic_{opponent}.png"
+        mod.plot_academic_figure(opponent, by_depth, per_seed, tft_per_seed_pooled, pooled, n_boot=50, rng=random.Random(0), out_path=out_path)
+        ax = plt.gcf().axes[0]
+        assert ax.get_title() == expected_title
+        assert ax.get_legend()._get_loc() == 2  # matplotlib's internal code for "upper left"
+        plt.close("all")

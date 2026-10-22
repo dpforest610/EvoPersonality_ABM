@@ -87,6 +87,10 @@ ACADEMIC_LEGEND_LABEL = {"depthHigh": "記憶が深い", "depthMid": "中くら�
 ACADEMIC_LEGEND_ORDER = ["depthHigh", "depthMid", "depthLow"]  # legend row order requested
 TFT_REFERENCE_LABEL = "TFT相手(参考)"
 
+# section 6.6's revised title wording per focal opponent
+ACADEMIC_TITLE_LABEL = {"SELF": "仲間(SELF)", "POP": "同じ集団(POP)", "WSLS": "WSLS"}
+ACADEMIC_BAND_CAPTION = "帯はseedをまたいだブートストラップの95%範囲"
+
 HIRAGINO_CANDIDATES = ["Hiragino Sans", "Hiragino Kaku Gothic ProN", "Hiragino Kaku Gothic Pro"]
 
 
@@ -310,15 +314,16 @@ def plot_academic_figure(
 
     ax.set_xlabel("世代")
     ax.set_ylabel("20回のうちに和和和へ戻れた割合")
-    ax.set_title(f"底からの回復:{opponent}相手(記憶深さ群別、seedブートストラップ95%帯)")
+    ax.set_title(f"底からの回復:{ACADEMIC_TITLE_LABEL[opponent]}相手")
     ax.set_ylim(0, 1.0)
     handles, labels = ax.get_legend_handles_labels()
     order = ACADEMIC_LEGEND_ORDER + ["_tft"]
     label_order = [ACADEMIC_LEGEND_LABEL[g] for g in ACADEMIC_LEGEND_ORDER] + [TFT_REFERENCE_LABEL]
     ordered = sorted(zip(handles, labels), key=lambda hl: label_order.index(hl[1]))
-    ax.legend([h for h, _ in ordered], [l for _, l in ordered], loc="lower left", fontsize=9)
+    ax.legend([h for h, _ in ordered], [l for _, l in ordered], loc="upper left", fontsize=9)
     ax.grid(alpha=0.2)
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0.04, 1, 1))
+    fig.text(0.5, 0.01, ACADEMIC_BAND_CAPTION, ha="center", fontsize=8, color="gray")
     fig.savefig(out_path, dpi=130)
     print(f"wrote {out_path}", flush=True)
 
