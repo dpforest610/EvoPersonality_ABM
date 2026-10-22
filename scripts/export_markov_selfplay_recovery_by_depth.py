@@ -266,6 +266,17 @@ def run_all_ages(
         wsls_rule_rows.append(result["wsls_rule_row"])
         per_seed_rows.extend(result["per_seed_rows"])
 
+    # Explicit, deterministic row order (not relied-upon insertion order) --
+    # every run of this script, on the same data, produces byte-identical
+    # CSVs regardless of ProcessPoolExecutor completion order or process
+    # launch (string hash randomization affects dict/set iteration order
+    # between separate `python3 ...` runs, which previously also leaked
+    # into write_widest_path_csv's column order -- see that function in
+    # export_markov_selfplay_recovery.py, reused here).
+    recovery_rows.sort(key=lambda r: (r["opponent"], r["depth_group"], r["age"]))
+    wsls_rule_rows.sort(key=lambda r: r["age"])
+    per_seed_rows.sort(key=lambda r: (r["opponent"], r["depth_group"], r["age"], r["seed"]))
+
     return recovery_rows, wsls_rule_rows, per_seed_rows
 
 

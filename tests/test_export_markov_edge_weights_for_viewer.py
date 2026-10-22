@@ -131,6 +131,23 @@ def test_node_appearance_rates_covers_every_vocab_word_including_zeros():
     assert all(0.0 <= v <= 1.0 for v in rates.values())
 
 
+def test_node_appearance_rates_key_order_is_sorted_not_frozenset_order():
+    # `vocab` is a frozenset, whose own iteration order depends on
+    # Python's per-process string hash randomization -- iterating it
+    # directly to build the returned dict used to make the JSON output's
+    # key order differ between separate `python3 ...` launches even
+    # though every value stayed the same. The returned dict's keys must
+    # be in a fixed (sorted) order regardless of which frozenset object
+    # (same elements, unrelated construction) is passed in.
+    pool = _tiny_pool()
+    rates = mod.node_appearance_rates_over_draws(pool, _TINY_VOCAB, group_size=2, n_draws=5, rng=random.Random(0))
+    assert list(rates.keys()) == sorted(_TINY_VOCAB)
+
+    other_vocab_same_elements = frozenset({"底底惨", "底底底", "和搾底", "和和搾", "和和和"})
+    rates2 = mod.node_appearance_rates_over_draws(pool, other_vocab_same_elements, group_size=2, n_draws=5, rng=random.Random(0))
+    assert list(rates2.keys()) == list(rates.keys())
+
+
 def test_node_appearance_rates_consumes_the_identical_rng_sequence_as_edges():
     """The core correctness requirement: --nodes-only must draw EXACTLY
     the same 200 cross-lineage groups the edge-weight export would have

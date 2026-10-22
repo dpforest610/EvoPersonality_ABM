@@ -302,15 +302,31 @@ def run_all_ages(
         for opponent, rates in result["nodes_by_opponent"].items():
             nodes_by_opponent[opponent][age] = rates
 
+    # Explicit, deterministic row order (not relied-upon insertion order) --
+    # every run of this script, on the same data, produces byte-identical
+    # CSVs regardless of ProcessPoolExecutor completion order or process
+    # launch (string hash randomization affects dict/set iteration order
+    # between separate `python3 ...` runs, which previously also leaked
+    # into write_widest_path_csv's column order -- see that function).
+    widest_path_rows.sort(key=lambda r: (r["opponent"], r["age"]))
+    recovery_time_rows.sort(key=lambda r: (r["opponent"], r["age"]))
+
     return widest_path_rows, recovery_time_rows, edges_by_opponent, nodes_by_opponent
 
 
 def write_widest_path_csv(path: Path, rows: List[dict]) -> None:
+    """Writes `rows` as-is (caller is responsible for sorting them into a
+    deterministic order first -- see each script's run_all_ages). The
+    column order, however, is this function's own responsibility: it used
+    to be `list({k for row in rows for k in row})`, a set comprehension
+    whose iteration order depends on Python's per-process string hash
+    randomization (PYTHONHASHSEED) -- same row content, shuffled columns
+    on every separate `python3 ...` launch. `sorted(...)` fixes that."""
     if not rows:
         with open(path, "w", newline="") as f:
             f.write("")
         return
-    fieldnames = list({k for row in rows for k in row})
+    fieldnames = sorted({k for row in rows for k in row})
     with open(path, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=fieldnames)
         w.writeheader()

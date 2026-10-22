@@ -188,3 +188,36 @@ def test_write_widest_path_csv_handles_empty_rows(tmp_path):
     path = tmp_path / "out.csv"
     mod.write_widest_path_csv(path, [])
     assert path.exists()
+
+
+def test_write_widest_path_csv_column_order_is_alphabetically_sorted_not_set_order(tmp_path):
+    # the column order used to come from `list({...})` -- a set
+    # comprehension whose iteration order depends on Python's per-process
+    # string hash randomization, so the SAME rows could get a DIFFERENT
+    # header order on every separate `python3 ...` launch. It must now be
+    # deterministic (alphabetically sorted) regardless of row dict
+    # insertion order.
+    rows = [{"zzz": 1, "aaa": 2, "mmm": 3}]
+    path = tmp_path / "out.csv"
+    mod.write_widest_path_csv(path, rows)
+    with open(path, newline="") as f:
+        header = next(csv.reader(f))
+    assert header == ["aaa", "mmm", "zzz"]
+
+
+# ------------------------------------------------------------------ run_all_ages row order determinism
+
+def test_run_all_ages_widest_path_and_recovery_time_rows_are_sorted_by_opponent_then_age(tmp_path):
+    data_dir = tmp_path / "data"
+    for seed in (0, 1):
+        for age in (1000, 1050):
+            write_census(mod.reprobe_mod.census_path(data_dir, seed, age), [(0, 1, 5, "0,1,0,1", "1,1")])
+            write_moves(data_dir / f"seed_{seed}_probe_age_{age}_noise0p01_moves.csv.gz", [(0, "WSLS", 0, r, "C", "C") for r in range(1, 6)])
+
+    widest_path_rows, recovery_time_rows, _edges, _nodes = mod.run_all_ages(
+        data_dir, "noise0p01", [1050, 1000], [1, 0],  # ages/seeds deliberately UNSORTED on input
+        probe_repeats=2, probe_rounds=5, main_analysis_rounds=3, noise_rate=0.0,
+        group_size=2, n_draws=2, master_seed="t", workers=1, cache_dir=tmp_path / "cache",
+    )
+    assert [(r["opponent"], r["age"]) for r in widest_path_rows] == sorted((r["opponent"], r["age"]) for r in widest_path_rows)
+    assert [(r["opponent"], r["age"]) for r in recovery_time_rows] == sorted((r["opponent"], r["age"]) for r in recovery_time_rows)

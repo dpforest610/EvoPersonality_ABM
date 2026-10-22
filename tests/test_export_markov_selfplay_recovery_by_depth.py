@@ -204,3 +204,25 @@ def test_process_one_age_per_seed_rows_sum_across_seeds_to_pooled_rows(tmp_path)
     pooled = {(r["opponent"], r["depth_group"]): (r["n"], r["n_recovered"]) for r in result["recovery_rows"]}
     assert per_seed_sums == pooled
     assert {r["seed"] for r in result["per_seed_rows"]} == {0, 1}
+
+
+# ------------------------------------------------------------------ run_all_ages row order determinism
+
+def test_run_all_ages_rows_are_sorted_deterministically(tmp_path):
+    data_dir = tmp_path / "data"
+    for seed in (0, 1):
+        for age in (1000, 1050):
+            write_census(mod.reprobe_mod.census_path(data_dir, seed, age), [(0, 1, 5, "1,0,0,1", "1,1")])
+
+    recovery_rows, wsls_rule_rows, per_seed_rows = mod.run_all_ages(
+        data_dir, [1050, 1000], [1, 0],  # ages/seeds deliberately UNSORTED on input
+        probe_repeats=2, free_rounds=5, noise_rate=0.0, d1=2, d2=3, max_depth=6,
+        master_seed="t", workers=1, cache_dir=tmp_path / "cache",
+    )
+    assert [(r["opponent"], r["depth_group"], r["age"]) for r in recovery_rows] == sorted(
+        (r["opponent"], r["depth_group"], r["age"]) for r in recovery_rows
+    )
+    assert [r["age"] for r in wsls_rule_rows] == sorted(r["age"] for r in wsls_rule_rows)
+    assert [(r["opponent"], r["depth_group"], r["age"], r["seed"]) for r in per_seed_rows] == sorted(
+        (r["opponent"], r["depth_group"], r["age"], r["seed"]) for r in per_seed_rows
+    )

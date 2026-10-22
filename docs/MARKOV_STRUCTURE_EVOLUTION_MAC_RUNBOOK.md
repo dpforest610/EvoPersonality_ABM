@@ -942,6 +942,21 @@ git push -u origin claude/markov-production-analysis
 (引数は13節と完全に同じ)。これで新たに`markov_selfplay_recovery_time_by_depth_per_seed.csv`
 が追加で書き出される。
 
+**出力順の修正(14節のpush後に追加)**:14節を最初に実行してpushした際、
+`markov_selfplay_recovery_time_by_depth.csv`・`markov_depth1_wsls_rule_fraction.csv`の
+値は正しかったが、実行するたびに列の並び順(およびCSV書き出しに使う内部の共通関数の
+実装上、行の並びにも影響しうる経路)が変わっていた。原因はPythonの`set`/`frozenset`の
+反復順が、実行プロセスごとにランダム化される文字列ハッシュに依存していたため
+(`write_widest_path_csv`の列名の組み立てと、`node_appearance_rates_over_draws`の
+語彙の反復)。両方とも、常に同じ(ソート済みの)順になるよう修正済み(コミット
+`<この修正のコミットを参照>`)。あわせて、各スクリプトの`run_all_ages`で、CSVに
+書き出す前に行自体も明示的にキー列(opponent・depth_group・age・seedなど)で
+並べ替えるようにした。**この修正により、同じデータに対して同じコマンドを何度実行
+しても、出力ファイルは(行・列とも)毎回バイト単位で完全に同一になることを、
+パイロットデータで2回連続実行して確認済み。** 13節・12節の出力ファイルも同じ
+共通関数を使っているため、同様に修正されている——再実行すると、値は変わらないが、
+列の並びが(今回限り)変わる場合がある。
+
 ### 14-1. 元データの再生成(13節と同じコマンド)
 
 ```bash

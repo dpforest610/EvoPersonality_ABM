@@ -209,18 +209,29 @@ def node_appearance_rates_over_draws(pool: Dict[int, tuple], vocab, group_size: 
     resample_cross_seed_group(pool, group_size, rng) call per draw --
     the same call, with the same arguments, that average_edges_over_draws
     makes -- so calling this in the same position in the same per-age
-    rng stream as the edge-weight export reproduces the IDENTICAL draws."""
+    rng stream as the edge-weight export reproduces the IDENTICAL draws.
+
+    `vocab` is a frozenset (evopersonality_abm.markov_recovery.load_vocab),
+    whose iteration order depends on Python's per-process string hash
+    randomization -- iterating it directly for dict construction would
+    make the returned dict's KEY ORDER (and hence this function's JSON
+    output) differ between separate process launches even though every
+    VALUE stays identical. sorted(vocab) fixes the key order without
+    touching the rng draws above (the random draw never depends on vocab
+    iteration order), so the rng-consistency guarantee this docstring
+    describes is unaffected."""
     if len(pool) < group_size:
         return None
-    sums: Dict[str, float] = {word: 0.0 for word in vocab}
+    vocab_sorted = sorted(vocab)
+    sums: Dict[str, float] = {word: 0.0 for word in vocab_sorted}
     for _ in range(n_draws):
         series, _idents = resample_cross_seed_group(pool, group_size, rng)
         counts: Counter = Counter()
         for s in series:
             counts.update(series_to_word_set(s, vocab))
-        for word in vocab:
+        for word in vocab_sorted:
             sums[word] += counts.get(word, 0) / group_size
-    return {word: round(sums[word] / n_draws, 4) for word in vocab}
+    return {word: round(sums[word] / n_draws, 4) for word in vocab_sorted}
 
 
 def process_one_age_nodes(
