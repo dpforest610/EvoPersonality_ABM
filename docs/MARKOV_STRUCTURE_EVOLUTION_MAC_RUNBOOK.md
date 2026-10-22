@@ -925,3 +925,91 @@ git push -u origin claude/markov-production-analysis
 (この2ファイル以外は変更されないはず——`markov_edge_weights.json`・`markov_node_freq.json`・
 12節の4ファイルを含め`git status --short`に出てこないことを確認すること。
 `_age_cache_selfplay_recovery_by_depth/`は`.gitignore`対象なので出ないはず。)
+
+---
+
+## 14. 学会スライド用の図(seedブートストラップ帯・ヒラギノ角ゴ、探索的・事前登録外)
+
+**対象ブランチ:`claude/markov-production-analysis`。**
+`docs/EXPLORATORY_selfplay_recovery.md`6.5節の図を、スライド用に作り直す:
+(1)縦軸を「20回のうちに和和和へ戻れた割合」(回復率)に、(2)各線にseedをまたいだ
+ブートストラップの95%帯を付け、(3)フォントをヒラギノ角ゴに、(4)凡例を「記憶が深い/
+中くらい/浅い/TFT相手(参考)」に、(5)SELFだけでなくPOP・WSLSの図も作る。
+13節で作った`markov_selfplay_recovery_time_by_depth.csv`・`markov_depth1_wsls_rule_fraction.csv`
+の2ファイルは**値は変わらない**(同じmaster_seed・同じcensusからの再計算で、乱数の流れも
+変えていない)が、seedごとの内訳を保持する新しいキャッシュ(`_age_cache_selfplay_recovery_by_depth_v2/`、
+13節のキャッシュとは別物)を使うため、**13節のコマンドをもう一度、そのまま再実行する**
+(引数は13節と完全に同じ)。これで新たに`markov_selfplay_recovery_time_by_depth_per_seed.csv`
+が追加で書き出される。
+
+### 14-1. 元データの再生成(13節と同じコマンド)
+
+```bash
+mkdir -p logs
+nohup caffeinate -dimsu venv/bin/python scripts/export_markov_selfplay_recovery_by_depth.py \
+  --data-dir scripts/output/markov_sweep_production_noise01 \
+  --noise-rate 0.01 \
+  --depth-cutpoints "2,3" \
+  > logs/selfplay_recovery_by_depth_v2.log 2>&1 &
+disown
+```
+
+(13節と同じ約6分の見積もり。`markov_selfplay_recovery_time_by_depth.csv`・
+`markov_depth1_wsls_rule_fraction.csv`の値は13節でpush済みのものと一致するはず
+——念のため`git diff`で確認すること。)
+
+### 14-2. 図の生成(Mac — ヒラギノ角ゴを使うにはMacで実行する必要がある)
+
+```bash
+venv/bin/python scripts/analyze_selfplay_recovery_by_depth.py \
+  --by-depth-csv scripts/output/figures/markov_selfplay_recovery_time_by_depth.csv \
+  --pooled-csv scripts/output/figures/markov_selfplay_recovery_time.csv \
+  --per-seed-csv scripts/output/figures/markov_selfplay_recovery_time_by_depth_per_seed.csv \
+  --out-dir scripts/output/figures
+```
+
+(`--pooled-csv`は12節で作った`markov_selfplay_recovery_time.csv`——変更不要、既にリポジトリに
+ある。実行すると、既存の`markov_selfplay_recovery_self_vs_tft_by_depth.png`(5節・元の図、
+**変更なし**で再生成されるだけ)に加え、新しく`markov_selfplay_recovery_rate_by_depth_academic_
+{SELF,POP,WSLS}.png`の3枚が書き出される。所要時間は数秒(対戦シミュレーションを行わず、
+既存のCSVを読んでブートストラップ[seedブートストラップ2000回×3群×2時点種×3相手]と
+作図を行うだけ)。)
+
+**フォントについて**:このスクリプトは起動時に、実行しているマシンにヒラギノ角ゴ
+(`Hiragino Sans`・`Hiragino Kaku Gothic ProN`・`Hiragino Kaku Gothic Pro`のいずれか)が
+インストールされているかを自動で確認する。
+
+- **Macで実行した場合**(ヒラギノが標準で入っている):自動的にヒラギノ角ゴで描画される。
+  何も指定する必要はない。
+- **見つからない場合**(クラウドでの実行時など):`IPAGothic`に自動で切り替わり、
+  標準エラー出力に警告が出る(`WARNING: no Hiragino font found...`)。**クラウドで実行した
+  図はこの警告が出ているはずなので、スライド用に使う前に、必ずMacでこのコマンドを
+  実行し直してヒラギノ角ゴ版を作ること。**
+
+### 14-3. 結果の確認・push
+
+書き出されるファイル(新規・更新分):
+- `scripts/output/figures/markov_selfplay_recovery_time_by_depth_per_seed.csv`(新規)
+- `scripts/output/figures/markov_selfplay_recovery_rate_by_depth_academic_SELF.png`(新規)
+- `scripts/output/figures/markov_selfplay_recovery_rate_by_depth_academic_POP.png`(新規)
+- `scripts/output/figures/markov_selfplay_recovery_rate_by_depth_academic_WSLS.png`(新規)
+- `scripts/output/figures/markov_selfplay_recovery_self_vs_tft_by_depth.png`(再生成されるが
+  **内容は変わらないはず**——元の図として残す依頼どおり、別ファイル名の新しい図を追加した
+  だけで、このファイル自体は上書きしても同じ内容になる)
+
+```bash
+git branch --show-current   # claude/markov-production-analysis を確認
+git status --short
+git add scripts/output/figures/markov_selfplay_recovery_time_by_depth_per_seed.csv \
+        scripts/output/figures/markov_selfplay_recovery_rate_by_depth_academic_SELF.png \
+        scripts/output/figures/markov_selfplay_recovery_rate_by_depth_academic_POP.png \
+        scripts/output/figures/markov_selfplay_recovery_rate_by_depth_academic_WSLS.png
+git commit -m "Academic-style recovery-rate-by-depth figures (SELF/POP/WSLS, bootstrap bands, Hiragino)"
+git push -u origin claude/markov-production-analysis
+```
+
+(`markov_selfplay_recovery_time_by_depth.csv`・`markov_depth1_wsls_rule_fraction.csv`・
+`markov_selfplay_recovery_self_vs_tft_by_depth.png`は値が変わらない想定なので`git add`に
+含めていない——`git status --short`でこれらに差分が出ていないか確認し、もし出ていたら
+[浮動小数点の丸め以外の]差分の原因を先に調べること。`_age_cache_selfplay_recovery_by_depth_v2/`
+は`.gitignore`対象なので出ないはず。)

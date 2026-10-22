@@ -1,5 +1,6 @@
 import csv
 import importlib.util
+import random
 import sys
 from pathlib import Path
 
@@ -26,6 +27,14 @@ def write_pooled_csv(path, rows):
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=["opponent", "age", "n_recovered", "n", "never_recovered_rate", "median_recovery_round"])
+        w.writeheader()
+        w.writerows(rows)
+
+
+def write_per_seed_csv(path, rows):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=["seed", "age", "opponent", "depth_group", "n", "n_recovered"])
         w.writeheader()
         w.writerows(rows)
 
@@ -132,3 +141,112 @@ def test_mean_rate_by_group_averages_across_all_probed_ages():
     })
     m = mod.mean_rate_by_group(by_age)
     assert m == pytest.approx({"depthLow": 0.7, "depthMid": 0.5, "depthHigh": 0.3})
+
+
+# ------------------------------------------------------------------ select_japanese_font
+
+def test_select_japanese_font_prefers_hiragino_sans_when_present():
+    font, is_hiragino = mod.select_japanese_font({"Hiragino Sans", "Arial", "IPAGothic"})
+    assert font == "Hiragino Sans"
+    assert is_hiragino is True
+
+
+def test_select_japanese_font_falls_back_to_ipagothic_when_no_hiragino():
+    font, is_hiragino = mod.select_japanese_font({"Arial", "DejaVu Sans"})
+    assert font == "IPAGothic"
+    assert is_hiragino is False
+
+
+def test_select_japanese_font_tries_other_hiragino_variants_in_order():
+    font, is_hiragino = mod.select_japanese_font({"Hiragino Kaku Gothic Pro"})
+    assert font == "Hiragino Kaku Gothic Pro"
+    assert is_hiragino is True
+
+
+# ------------------------------------------------------------------ load_per_seed / tft_pooled_per_seed
+
+def test_load_per_seed_nests_by_opponent_age_group_seed(tmp_path):
+    path = tmp_path / "per_seed.csv"
+    write_per_seed_csv(path, [
+        {"seed": 100, "age": 1000, "opponent": "TFT", "depth_group": "depthLow", "n": 60, "n_recovered": 6},
+    ])
+    out = mod.load_per_seed(path)
+    assert out["TFT"][1000]["depthLow"][100] == (60, 6)
+
+
+def test_tft_pooled_per_seed_sums_across_the_3_depth_groups_within_a_seed(tmp_path):
+    path = tmp_path / "per_seed.csv"
+    write_per_seed_csv(path, [
+        {"seed": 100, "age": 1000, "opponent": "TFT", "depth_group": "depthLow", "n": 60, "n_recovered": 6},
+        {"seed": 100, "age": 1000, "opponent": "TFT", "depth_group": "depthMid", "n": 30, "n_recovered": 3},
+        {"seed": 100, "age": 1000, "opponent": "TFT", "depth_group": "depthHigh", "n": 90, "n_recovered": 9},
+        {"seed": 101, "age": 1000, "opponent": "TFT", "depth_group": "depthLow", "n": 10, "n_recovered": 1},
+        # a different opponent in the same file must NOT leak into TFT's pooled sums
+        {"seed": 100, "age": 1000, "opponent": "SELF", "depth_group": "depthLow", "n": 1000, "n_recovered": 999},
+    ])
+    per_seed = mod.load_per_seed(path)
+    pooled = mod.tft_pooled_per_seed(per_seed)
+    assert pooled[1000][100] == (180, 18)
+    assert pooled[1000][101] == (10, 1)
+
+
+# ------------------------------------------------------------------ seed_bootstrap_recovered_rate
+
+def test_seed_bootstrap_recovered_rate_none_with_fewer_than_2_seeds():
+    assert mod.seed_bootstrap_recovered_rate({100: (10, 5)}, n_boot=100, rng=random.Random(0)) is None
+    assert mod.seed_bootstrap_recovered_rate({}, n_boot=100, rng=random.Random(0)) is None
+
+
+def test_seed_bootstrap_recovered_rate_band_straddles_the_point_estimate():
+    # 4 seeds with recovery rates 0.0, 0.33, 0.67, 1.0 -- pooled point
+    # estimate is 0.5; a 95% band over enough draws should bracket it.
+    seed_counts = {0: (10, 0), 1: (9, 3), 2: (9, 6), 3: (10, 10)}
+    lo, hi = mod.seed_bootstrap_recovered_rate(seed_counts, n_boot=2000, rng=random.Random(0))
+    assert lo <= 0.5 <= hi
+    assert 0.0 <= lo <= hi <= 1.0
+
+
+def test_seed_bootstrap_recovered_rate_degenerate_all_seeds_identical_gives_a_point_band():
+    # every seed has the exact same rate -> every bootstrap draw is
+    # identical -> lo == hi == that rate.
+    seed_counts = {0: (10, 5), 1: (20, 10), 2: (30, 15)}
+    lo, hi = mod.seed_bootstrap_recovered_rate(seed_counts, n_boot=200, rng=random.Random(0))
+    assert lo == pytest.approx(0.5)
+    assert hi == pytest.approx(0.5)
+
+
+def test_seed_bootstrap_recovered_rate_is_deterministic_given_the_same_rng_seed():
+    seed_counts = {0: (10, 2), 1: (15, 9), 2: (8, 1), 3: (12, 6)}
+    a = mod.seed_bootstrap_recovered_rate(seed_counts, n_boot=500, rng=random.Random(42))
+    b = mod.seed_bootstrap_recovered_rate(seed_counts, n_boot=500, rng=random.Random(42))
+    assert a == b
+
+
+# ------------------------------------------------------------------ plot_academic_figure (smoke)
+
+def _make_depth_fixture():
+    by_depth = {
+        opp: {
+            age: {g: {"never_recovered_rate": str(round(0.5 + 0.01 * i, 4))} for i, g in enumerate(mod.DEPTH_GROUPS)}
+            for age in (1000, 1050)
+        }
+        for opp in mod.OPPONENTS
+    }
+    per_seed = {
+        opp: {
+            age: {g: {100 + s: (20, 10 + s) for s in range(5)} for g in mod.DEPTH_GROUPS}
+            for age in (1000, 1050)
+        }
+        for opp in mod.OPPONENTS
+    }
+    pooled = {"TFT": {age: {"never_recovered_rate": "0.85"} for age in (1000, 1050)}}
+    return by_depth, per_seed, pooled
+
+
+def test_plot_academic_figure_writes_a_png_without_crashing(tmp_path):
+    by_depth, per_seed, pooled = _make_depth_fixture()
+    tft_per_seed_pooled = mod.tft_pooled_per_seed(per_seed)
+    out_path = tmp_path / "academic_SELF.png"
+    mod.plot_academic_figure("SELF", by_depth, per_seed, tft_per_seed_pooled, pooled, n_boot=50, rng=random.Random(0), out_path=out_path)
+    assert out_path.exists()
+    assert out_path.stat().st_size > 0

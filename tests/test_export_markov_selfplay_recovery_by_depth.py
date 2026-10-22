@@ -160,6 +160,11 @@ def test_process_one_age_combines_census_and_recovery_computation(tmp_path):
     assert result["wsls_rule_row"] == {"age": 1000, "n_depth1": 8, "n_wsls_rule": 5, "fraction": round(5 / 8, 4)}
     assert len(result["recovery_rows"]) > 0
     assert all(r["depth_group"] == "depthLow" for r in result["recovery_rows"])  # both genotypes are depth1 -> effective depth 1 -> depthLow
+    # single-seed run -> per-seed rows should sum to exactly the pooled rows
+    assert all(r["seed"] == 0 for r in result["per_seed_rows"])
+    pooled_by_key = {(r["opponent"], r["depth_group"]): (r["n"], r["n_recovered"]) for r in result["recovery_rows"]}
+    per_seed_by_key = {(r["opponent"], r["depth_group"]): (r["n"], r["n_recovered"]) for r in result["per_seed_rows"]}
+    assert per_seed_by_key == pooled_by_key
 
 
 def test_process_one_age_skips_seed_with_no_census(tmp_path):
@@ -167,3 +172,35 @@ def test_process_one_age_skips_seed_with_no_census(tmp_path):
     result = mod.process_one_age(str(data_dir), 1000, [0], probe_repeats=1, free_rounds=5, noise_rate=0.0, d1=2, d2=3, max_depth=6, master_seed="t")
     assert result["recovery_rows"] == []
     assert result["wsls_rule_row"] == {"age": 1000, "n_depth1": 0, "n_wsls_rule": 0, "fraction": ""}
+    assert result["per_seed_rows"] == []
+
+
+# ------------------------------------------------------------------ per_seed_rows_from_times
+
+def test_per_seed_rows_from_times_tags_each_row_with_the_seed():
+    seed_times = {("TFT", "depthLow"): [2, None, 4], ("SELF", "depthHigh"): [None]}
+    rows = mod.per_seed_rows_from_times(7, 1000, seed_times)
+    by_key = {(r["opponent"], r["depth_group"]): r for r in rows}
+    assert by_key[("TFT", "depthLow")] == {"seed": 7, "age": 1000, "opponent": "TFT", "depth_group": "depthLow", "n": 3, "n_recovered": 2}
+    assert by_key[("SELF", "depthHigh")]["n_recovered"] == 0
+
+
+def test_per_seed_rows_from_times_skips_empty_keys():
+    rows = mod.per_seed_rows_from_times(0, 1000, {("TFT", "depthLow"): [], ("SELF", "depthMid"): [1]})
+    assert {(r["opponent"], r["depth_group"]) for r in rows} == {("SELF", "depthMid")}
+
+
+def test_process_one_age_per_seed_rows_sum_across_seeds_to_pooled_rows(tmp_path):
+    data_dir = tmp_path / "data"
+    write_census(mod.reprobe_mod.census_path(data_dir, 0, 1000), [(0, 1, 2, "1,0,0,1", "1,1")])
+    write_census(mod.reprobe_mod.census_path(data_dir, 1, 1000), [(0, 1, 3, "0,1,0,1", "1,1")])
+    result = mod.process_one_age(str(data_dir), 1000, [0, 1], probe_repeats=2, free_rounds=5, noise_rate=0.0, d1=2, d2=3, max_depth=6, master_seed="t")
+
+    per_seed_sums = {}
+    for r in result["per_seed_rows"]:
+        key = (r["opponent"], r["depth_group"])
+        n, nr = per_seed_sums.get(key, (0, 0))
+        per_seed_sums[key] = (n + r["n"], nr + r["n_recovered"])
+    pooled = {(r["opponent"], r["depth_group"]): (r["n"], r["n_recovered"]) for r in result["recovery_rows"]}
+    assert per_seed_sums == pooled
+    assert {r["seed"] for r in result["per_seed_rows"]} == {0, 1}

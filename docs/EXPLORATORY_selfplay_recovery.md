@@ -321,11 +321,49 @@ memory_depth_evolution_50seed.png`で既に確認されている傾向)のに伴
 個体という母数自体が縮小していく。したがって後半のWSLS規則一致率の値は、より小さい
 母数に基づく推定であり、不確実性が大きい点に注意。
 
-### 6.5 学会スライド用の図
+### 6.5 学会スライド用の図(初版、保持)
 
 `scripts/output/figures/markov_selfplay_recovery_self_vs_tft_by_depth.png`
-(`scripts/analyze_selfplay_recovery_by_depth.py`が生成)。SELF相手のnever_recovered_rateを
-深さ3群(depthLow=青・depthMid=橙・depthHigh=赤、各世代の値をそのまま線でつないだもの、
-平滑化なし)で分け、比較のためTFT相手の深さを分けない全体値を薄い破線で重ねた。
-6.4.1節の「SELF相手では深さが深いほど回復しやすい」「TFT相手ではどの深さでもほぼ回復
-しない」の両方が視覚的に確認できる。
+(`scripts/analyze_selfplay_recovery_by_depth.py`の`plot_self_vs_tft`が生成、**以降の改訂でも
+このファイル・この関数は変更していない**)。SELF相手のnever_recovered_rateを深さ3群
+(depthLow=青・depthMid=橙・depthHigh=赤、各世代の値をそのまま線でつないだもの、平滑化なし)
+で分け、比較のためTFT相手の深さを分けない全体値を薄い破線で重ねた。6.4.1節の「SELF相手
+では深さが深いほど回復しやすい」「TFT相手ではどの深さでもほぼ回復しない」の両方が視覚的
+に確認できる。
+
+### 6.6 学会スライド用の図(改訂版:回復率・ブートストラップ帯・ヒラギノ角ゴ)
+
+6.5節の図への4つの改訂依頼を反映した版。**元の図(6.5節)は変更していない**——別ファイル名
+(`markov_selfplay_recovery_rate_by_depth_academic_{SELF,POP,WSLS}.png`)で追加した。
+
+1. **縦軸を回復率にした**:never_recovered_rateではなく「20回のうちに和和和へ戻れた割合」
+   (1-never_recovered_rate)を縦軸にする。
+2. **seedをまたいだブートストラップの95%帯**:各線(3つの深さ群+TFT参考線)に薄い帯を
+   付けた。70 seedを復元抽出で2000回選び直し、そのたびに再プールした回復率を計算する
+   ——本プロジェクトの他の箇所(確証的分析のseedブートストラップ)と同じ「seed単位で
+   まるごと選び直す」方式。既存の集計CSV(`markov_selfplay_recovery_time_by_depth.csv`)は
+   seedごとの内訳をプールして捨ててしまっているため、`export_markov_selfplay_recovery_by_depth.py`
+   を拡張し、新しく`markov_selfplay_recovery_time_by_depth_per_seed.csv`(seed・世代・相手・
+   深さ群ごとのn・n_recovered)を追加で書き出すようにした(既存の2つの出力ファイルの値は
+   変えていない——同じmaster_seed・同じ乱数の流れからの再計算で、seedごとの内訳を"ついでに"
+   記録するようにしただけ)。TFT参考線(深さを分けない全体値)の帯は、3つの深さ群のseedごとの
+   カウントをseed内で合算して作る(`tft_pooled_per_seed`)——別途TFT専用の集計をやり直す
+   必要はない。
+3. **フォント**:ヒラギノ角ゴ(`Hiragino Sans`等)を使う。このクラウド環境にはヒラギノが
+   インストールされていないため(`fc-list`で確認済み)、スクリプトは実行時にインストール
+   済みフォントを自動確認し、見つからなければ`IPAGothic`に切り替えて警告を出す
+   (`select_japanese_font`、テスト済み)。**Macで実行すればヒラギノ角ゴが自動で使われる**
+   ——Mac用の手順は`docs/MARKOV_STRUCTURE_EVOLUTION_MAC_RUNBOOK.md`14節を参照。
+4. **凡例の文言**:depthHigh→「記憶が深い」、depthMid→「中くらい」、depthLow→「浅い」、
+   TFT参考線→「TFT相手(参考)」に変更した(この順で表示)。
+5. **POP・WSLSの図も追加**:SELFと同じ構成(3つの深さ群+TFT参考線)で、POP相手・WSLS相手
+   それぞれの図を作った。
+
+#### 結果
+
+**(Macでの本番実行待ち。`scripts/output/figures/markov_selfplay_recovery_time_by_depth_per_seed.csv`
+が本番データでpushされ、Mac上でこのスクリプトを実行してヒラギノ角ゴ版の図が得られたら、
+このセクションに画像の要点を追記する。)** コードはテスト18件(新規10件)・単体テスト・
+パイロットデータでの一気通貫のスモークテスト(10 seed・3時点、ブートストラップ帯を含む
+4枚のPNGが正しく書き出されることを確認——クラウドではヒラギノがないためIPAGothicに
+自動フォールバックし、警告が出ることも確認済み)で検証済み。

@@ -27,8 +27,23 @@ markov_selfplay_widest_path.csv, markov_selfplay_recovery_time.csv,
 markov_selfplay_edges.json, or markov_selfplay_nodes.json. Writes:
   scripts/output/figures/markov_selfplay_recovery_time_by_depth.csv
   scripts/output/figures/markov_depth1_wsls_rule_fraction.csv
+  scripts/output/figures/markov_selfplay_recovery_time_by_depth_per_seed.csv
 
-Usage: see docs/MARKOV_STRUCTURE_EVOLUTION_MAC_RUNBOOK.md section 13.
+The per-seed CSV (one row per seed x age x opponent x depth_group that
+had any data) exists ONLY so a later, separate analysis step
+(scripts/analyze_selfplay_recovery_by_depth.py section 6.5) can compute
+a seed-level bootstrap 95% band around each line -- the two pooled CSVs
+above are the exact same point estimates as before (unchanged schema,
+unchanged values given the same master_seed/census, since this adds a
+per-seed accumulation alongside the existing pooling rather than
+changing any rng draw). Uses a NEW cache directory
+(_age_cache_selfplay_recovery_by_depth_v2/) since the cached pickle's
+schema gained a field -- a stale v1 cache from before this per-seed
+tracking was added is simply ignored, not reused or upgraded in place.
+
+Usage: see docs/MARKOV_STRUCTURE_EVOLUTION_MAC_RUNBOOK.md section 13
+(for the original 2 outputs) and section 14 (for the per-seed CSV and
+the academic-figure regeneration that reads it).
 """
 
 import argparse
@@ -155,6 +170,21 @@ def summarize_recovery_times_by_depth(age: int, pooled: Dict[Tuple[str, str], Li
     return rows
 
 
+def per_seed_rows_from_times(seed: int, age: int, seed_times: Dict[Tuple[str, str], List[Optional[int]]]) -> List[dict]:
+    """[(seed, age, opponent, depth_group, n, n_recovered), ...] for ONE
+    seed's own (opponent, depth_group)-keyed recovery-time draws -- reuses
+    summarize_recovery_times_by_depth (same n/n_recovered logic) and just
+    tags each row with which seed it came from, for a later seed-level
+    bootstrap (scripts/analyze_selfplay_recovery_by_depth.py)."""
+    rows = []
+    for row in summarize_recovery_times_by_depth(age, seed_times):
+        rows.append({
+            "seed": seed, "age": age, "opponent": row["opponent"], "depth_group": row["depth_group"],
+            "n": row["n"], "n_recovered": row["n_recovered"],
+        })
+    return rows
+
+
 def process_one_age(
     data_dir_str: str, age: int, seeds: List[int], probe_repeats: int,
     free_rounds: int, noise_rate: float, d1: int, d2: int, max_depth: int, master_seed: str,
@@ -163,6 +193,7 @@ def process_one_age(
     depth_group_of_depth = depth_group_lookup(d1, d2, max_depth)
 
     pooled_recovery: Dict[Tuple[str, str], List[Optional[int]]] = defaultdict(list)
+    per_seed_rows: List[dict] = []
     total_depth1 = 0
     total_wsls_rule = 0
 
@@ -182,6 +213,7 @@ def process_one_age(
         seed_times = recovery_times_by_depth_for_seed_age(
             census, probe_repeats, free_rounds, noise_rate, rng, depth_group_of_depth,
         )
+        per_seed_rows.extend(per_seed_rows_from_times(seed, age, seed_times))
         for key, times in seed_times.items():
             pooled_recovery[key].extend(times)
 
@@ -193,7 +225,7 @@ def process_one_age(
         "fraction": round(total_wsls_rule / total_depth1, 4) if total_depth1 else "",
     }
 
-    return {"age": age, "recovery_rows": recovery_rows, "wsls_rule_row": wsls_rule_row}
+    return {"age": age, "recovery_rows": recovery_rows, "wsls_rule_row": wsls_rule_row, "per_seed_rows": per_seed_rows}
 
 
 def age_cache_path(cache_dir: Path, age: int) -> Path:
@@ -203,7 +235,7 @@ def age_cache_path(cache_dir: Path, age: int) -> Path:
 def run_all_ages(
     data_dir: Path, ages: List[int], seeds: List[int], probe_repeats: int, free_rounds: int,
     noise_rate: float, d1: int, d2: int, max_depth: int, master_seed: str, workers: int, cache_dir: Path,
-) -> Tuple[List[dict], List[dict]]:
+) -> Tuple[List[dict], List[dict], List[dict]]:
     cache_dir.mkdir(parents=True, exist_ok=True)
     pending = [a for a in ages if not age_cache_path(cache_dir, a).exists()]
     print(f"{len(ages) - len(pending)}/{len(ages)} ages already cached, {len(pending)} pending", flush=True)
@@ -226,13 +258,15 @@ def run_all_ages(
 
     recovery_rows = []
     wsls_rule_rows = []
+    per_seed_rows = []
     for age in ages:
         with open(age_cache_path(cache_dir, age), "rb") as f:
             result = pickle.load(f)
         recovery_rows.extend(result["recovery_rows"])
         wsls_rule_rows.append(result["wsls_rule_row"])
+        per_seed_rows.extend(result["per_seed_rows"])
 
-    return recovery_rows, wsls_rule_rows
+    return recovery_rows, wsls_rule_rows, per_seed_rows
 
 
 def main():
@@ -256,10 +290,10 @@ def main():
     seeds = list(range(args.seed_offset, args.seed_offset + args.seeds))
     ages = list(range(args.generations_start, args.generations_end + 1, args.probe_interval))
     out_dir = Path(args.out_dir)
-    cache_dir = out_dir / "_age_cache_selfplay_recovery_by_depth"
+    cache_dir = out_dir / "_age_cache_selfplay_recovery_by_depth_v2"
     d1, d2 = (int(x) for x in args.depth_cutpoints.split(","))
 
-    recovery_rows, wsls_rule_rows = run_all_ages(
+    recovery_rows, wsls_rule_rows, per_seed_rows = run_all_ages(
         Path(args.data_dir), ages, seeds, args.probe_repeats, args.free_rounds, args.noise_rate,
         d1, d2, args.max_depth, args.master_seed, args.workers, cache_dir,
     )
@@ -270,6 +304,9 @@ def main():
 
     recovery_mod.write_widest_path_csv(out_dir / "markov_depth1_wsls_rule_fraction.csv", wsls_rule_rows)
     print(f"wrote {out_dir / 'markov_depth1_wsls_rule_fraction.csv'} ({len(wsls_rule_rows)} rows)", flush=True)
+
+    recovery_mod.write_widest_path_csv(out_dir / "markov_selfplay_recovery_time_by_depth_per_seed.csv", per_seed_rows)
+    print(f"wrote {out_dir / 'markov_selfplay_recovery_time_by_depth_per_seed.csv'} ({len(per_seed_rows)} rows)", flush=True)
 
 
 if __name__ == "__main__":
