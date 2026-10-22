@@ -787,3 +787,75 @@ git add scripts/output/figures/markov_node_freq.json
 git commit -m "Add ABM node-appearance-rate JSON for the Markov network viewer"
 git push -u origin claude/markov-production-analysis
 ```
+
+---
+
+## 12. SELF/POP/WSLS自己対戦プローブ・底からの回復時間(探索的・事前登録外)
+
+**対象ブランチ:`claude/markov-production-analysis`。**
+`docs/EXPLORATORY_selfplay_recovery.md`の調査(進化した個体がTFT相手には底底底から戻れないのが
+「回復力の欠如」か「仲間限定の回復力」かを見分ける)の本番実行。既存の主条件データ
+(`scripts/output/markov_sweep_production_noise01/`、8-9節で確定済み)のcensus(SELF/POP用)と
+既存のWSLSプローブ記録(そのまま再利用)だけを使い、**新たな進化は行わない**。
+`scripts/output/figures/markov_edge_weights.json`・`markov_node_freq.json`は一切読み書きしない
+(別ファイルに書く)。
+
+```bash
+mkdir -p logs
+nohup caffeinate -dimsu venv/bin/python scripts/export_markov_selfplay_recovery.py \
+  --data-dir scripts/output/markov_sweep_production_noise01 \
+  --moves-suffix noise0p01 \
+  --noise-rate 0.01 \
+  > logs/selfplay_recovery.log 2>&1 &
+disown
+```
+
+(`--seeds 70 --seed-offset 100 --generations-start 1000 --generations-end 5000
+--probe-interval 50 --probe-repeats 30 --probe-rounds 100 --main-analysis-rounds 20
+--group-size 56 --n-draws 200 --workers 5`は既定値のまま。50世代おきが重すぎる場合は
+`--probe-interval 250`に切り替える[スクリプト自身のヘルプにも明記]。)
+
+### 12-1. 所要時間・メモリの見積もり
+
+クラウドのパイロットデータ(`scripts/output/markov_sweep_pilot_noise00`、10 seed)に対する
+実測ベースの推定:本番と同じ`--probe-repeats 30 --probe-rounds 100 --main-analysis-rounds 20`
+で1 (seed, age)単位あたり約2.9秒(SELF/POP series構築+底からの回復時間の計算を合わせた値;
+回復時間の追加分は、多くの対戦が20回以内の早い手番で回復してしまうため計算量への影響は小さい)。
+70 seed×81時点(gen 1000〜5000、50世代おき)÷`--workers 5` ≈ **約55分**。
+(ブートストラップ集計[widest path・辺の重み・ノード出現率]は1時点あたり数秒と軽く、
+上記の見積もりに対して無視できる。)年代ごとにpickleキャッシュするので
+(`_age_cache_selfplay/`、`.gitignore`対象)、中断しても同じコマンドで再開できる。
+メモリは9-2節と同様、1GB未満の見込み。
+
+本番前に実測で見積もりを更新したい場合は、8-4節と同じ要領で`--generations-end`を縮めて
+(例:`--generations-end 1100`で3時点のみ)小規模に実行し、かかった時間を時点数で割る。
+
+### 12-2. 進捗・再開
+
+```bash
+ps aux | grep export_markov_selfplay_recovery | grep -v grep
+tail -40 logs/selfplay_recovery.log
+```
+
+### 12-3. 結果の確認・push
+
+書き出されるファイル:
+- `scripts/output/figures/markov_selfplay_widest_path.csv`
+- `scripts/output/figures/markov_selfplay_recovery_time.csv`
+- `scripts/output/figures/markov_selfplay_edges.json`
+- `scripts/output/figures/markov_selfplay_nodes.json`
+
+```bash
+git branch --show-current   # claude/markov-production-analysis を確認
+git status --short
+git add scripts/output/figures/markov_selfplay_widest_path.csv \
+        scripts/output/figures/markov_selfplay_recovery_time.csv \
+        scripts/output/figures/markov_selfplay_edges.json \
+        scripts/output/figures/markov_selfplay_nodes.json
+git commit -m "SELF/POP/WSLS self-play recovery probe: widest-path, recovery-time, edge/node JSON"
+git push -u origin claude/markov-production-analysis
+```
+
+(**`scripts/output/figures/markov_edge_weights.json`・`markov_node_freq.json`はこの手順で
+一切変更されないはず**——`git status --short`でこの2ファイルが変更として出てこないことを
+確認すること。`_age_cache_selfplay/`は`.gitignore`対象なので出ないはず。)

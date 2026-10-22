@@ -4,6 +4,7 @@ from evopersonality_abm.lindgren import (
     LindgrenTable,
     always_defect_table,
     duplicate_memory,
+    pavlov_table,
     tit_for_tat_table,
 )
 from evopersonality_abm.markov_recovery import load_vocab
@@ -14,6 +15,7 @@ from evopersonality_abm.probe import (
     census_genotypes,
     genotype_key,
     make_opponent_strategy,
+    recovery_time_from_forced_bottom,
     run_probe_duel,
     run_selfplay_duel,
 )
@@ -212,3 +214,65 @@ def test_run_selfplay_duel_noise_rate_can_change_realized_moves():
     clean = run_selfplay_duel(focal, partner, random.Random(0), rounds=10, noise_rate=0.0)
     noisy = run_selfplay_duel(focal, partner, random.Random(0), rounds=10, noise_rate=1.0)
     assert clean != noisy
+
+
+# ------------------------------------------------------------------ recovery_time_from_forced_bottom
+# (exploratory, outside preregistration -- docs/EXPLORATORY_selfplay_recovery.md section 3)
+
+def test_recovery_time_wsls_vs_tft_never_recovers():
+    """Hand-verified: from a forced-DD start, WSLS's win-stay-lose-shift
+    rule and TFT's reciprocation lock into a permanent 3-round cycle
+    (底->惨->搾->底->...) and never reach 2 consecutive CC within 20
+    rounds -- confirming that a strategy which looks "cooperative" in
+    isolation can still be structurally unable to recover against a
+    strict reciprocator."""
+    rt = recovery_time_from_forced_bottom(
+        pavlov_table(), tit_for_tat_table(), random.Random(0), free_rounds=20, noise_rate=0.0,
+    )
+    assert rt is None
+
+
+def test_recovery_time_wsls_vs_tft_cycles_through_bottom_sucker_temptation():
+    # directly verify the claimed cycle shape, not just that it fails to recover
+    focal, opponent = pavlov_table(), tit_for_tat_table()
+    own_history = ["D", "D", "D"]
+    opp_history = ["D", "D", "D"]
+    states = []
+    for _ in range(9):  # 3 full cycles
+        own_action = focal.decide(own_history, opp_history)
+        opp_action = opponent.decide(opp_history, own_history)
+        own_history.append(own_action)
+        opp_history.append(opp_action)
+        states.append((own_action, opp_action))
+    # repeating 3-cycle: (C,D) 惨 -> (D,C) 搾 -> (D,D) 底 -> repeat
+    assert states == [("C", "D"), ("D", "C"), ("D", "D")] * 3
+
+
+def test_recovery_time_wsls_vs_wsls_recovers_two_rounds_after_a_single_error():
+    """Hand-verified: starting from a stable mutual-cooperation history,
+    injecting exactly ONE error (focal defects once while the opponent's
+    own decision that round is unaffected) causes both sides to defect
+    once in lockstep the following round, then recover to mutual
+    cooperation exactly 2 rounds after the error -- WSLS's classic
+    "forgiving but not exploitable" recovery property, which only works
+    because the partner is ALSO WSLS (contrast with the TFT case above)."""
+    focal, partner = pavlov_table(), pavlov_table()
+    own_history = ["C", "C", "C"]
+    opp_history = ["C", "C", "C"]
+
+    partner_action = partner.decide(opp_history, own_history)  # unaffected by the error
+    own_history.append("D")  # the single injected error
+    opp_history.append(partner_action)
+    assert (own_history[-1], opp_history[-1]) == ("D", "C")
+
+    results = []
+    for _ in range(3):
+        fa = focal.decide(own_history, opp_history)
+        pa = partner.decide(opp_history, own_history)
+        own_history.append(fa)
+        opp_history.append(pa)
+        results.append((fa, pa))
+
+    assert results[0] == ("D", "D")  # 1 round after the error: both defect (not yet recovered)
+    assert results[1] == ("C", "C")  # 2 rounds after the error: recovered
+    assert results[2] == ("C", "C")  # stays recovered

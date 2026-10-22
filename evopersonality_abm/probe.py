@@ -17,6 +17,7 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from .agent import Agent
 from .duel import run_duel
+from .game import COOPERATE, DEFECT
 from .lindgren import (
     LindgrenTable,
     always_cooperate_table,
@@ -116,3 +117,47 @@ def run_selfplay_duel(
     partner = Agent("partner", partner_table.as_strategy())
     run_duel(focal, partner, rounds=rounds, noise_rate=noise_rate, rng=rng)
     return focal.history_self, partner.history_self
+
+
+def recovery_time_from_forced_bottom(
+    focal_table: LindgrenTable,
+    opponent_table: LindgrenTable,
+    rng: random.Random,
+    free_rounds: int = 20,
+    noise_rate: float = 0.01,
+) -> Optional[int]:
+    """Exploratory, outside preregistration, NOT one of the human study's
+    own measures (docs/EXPLORATORY_selfplay_recovery.md section 3): forces
+    the first 3 rounds to mutual defection (DD, i.e. the 底底底 state),
+    then lets focal_table and opponent_table play `free_rounds` more
+    rounds freely (same per-round "trembling hand" noise convention as
+    duel.run_duel). Returns the 1-indexed round, WITHIN the free phase,
+    at which 2 CONSECUTIVE rounds of mutual cooperation (CC) first occur
+    -- "recovery time from the bottom" -- or None if it never happens
+    within free_rounds (right-censored).
+
+    Both sides are plain LindgrenTables here (TFT/WSLS/a population
+    partner/the focal table itself for SELF), decided directly via
+    `decide()` rather than through Agent/run_duel, since this needs a
+    hand-forced initial history that run_duel has no hook for."""
+    own_history = [DEFECT, DEFECT, DEFECT]
+    opp_history = [DEFECT, DEFECT, DEFECT]
+
+    for round_i in range(1, free_rounds + 1):
+        own_action = focal_table.decide(own_history, opp_history)
+        opp_action = opponent_table.decide(opp_history, own_history)
+        if noise_rate and rng.random() < noise_rate:
+            own_action = DEFECT if own_action == COOPERATE else COOPERATE
+        if noise_rate and rng.random() < noise_rate:
+            opp_action = DEFECT if opp_action == COOPERATE else COOPERATE
+
+        own_history.append(own_action)
+        opp_history.append(opp_action)
+
+        if (
+            own_action == COOPERATE and opp_action == COOPERATE
+            and own_history[-2] == COOPERATE and opp_history[-2] == COOPERATE
+        ):
+            return round_i
+
+    return None
