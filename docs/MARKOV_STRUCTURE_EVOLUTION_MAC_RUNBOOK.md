@@ -859,3 +859,69 @@ git push -u origin claude/markov-production-analysis
 (**`scripts/output/figures/markov_edge_weights.json`・`markov_node_freq.json`はこの手順で
 一切変更されないはず**——`git status --short`でこの2ファイルが変更として出てこないことを
 確認すること。`_age_cache_selfplay/`は`.gitignore`対象なので出ないはず。)
+
+---
+
+## 13. 記憶の深さ別の回復時間・WSLS規則一致率(探索的・事前登録外)
+
+**対象ブランチ:`claude/markov-production-analysis`。**
+`docs/EXPLORATORY_selfplay_recovery.md`6節の追加分析。12節の底からの回復時間を、ビューア
+(10〜11節)と同じ実効記憶深さ3群(depthLow/depthMid/depthHigh)に分けて世代ごとに見る。
+あわせて、記憶深さ1個体中でWSLSの規則(`[1,0,0,1]`)と一致する個体の割合も求める。
+**新たな進化は行わない**——既存の本番census(`seed_X_probe_age_G_census.csv.gz`)だけを
+読む(moves.csv.gzは読まない)。12節の`_age_cache_selfplay/`とは別の新しいキャッシュを使う
+(12節のキャッシュには個体ごとの深さの情報が残っていないため、流用できない——詳細は
+`docs/EXPLORATORY_selfplay_recovery.md`6.1節)。`markov_edge_weights.json`・
+`markov_node_freq.json`・12節の4つの出力ファイルはいずれも一切読み書きしない。
+
+```bash
+mkdir -p logs
+nohup caffeinate -dimsu venv/bin/python scripts/export_markov_selfplay_recovery_by_depth.py \
+  --data-dir scripts/output/markov_sweep_production_noise01 \
+  --noise-rate 0.01 \
+  --depth-cutpoints "2,3" \
+  > logs/selfplay_recovery_by_depth.log 2>&1 &
+disown
+```
+
+(`--depth-cutpoints "2,3"`は10〜12節で決定・使用した値と**同じ**(`export_depth_groups_for_r.py`
+が本番データから提案し、`--nodes-only`の実行(11-5節)まで一貫して使ってきた値)。
+`--seeds 70 --seed-offset 100 --generations-start 1000
+--generations-end 5000 --probe-interval 50 --probe-repeats 30 --free-rounds 20
+--max-depth 6 --workers 5`は既定値のまま。)
+
+### 13-1. 所要時間の見積もり
+
+クラウドのパイロットデータ(10 seed)に対する実測:本番と同じ`--probe-repeats 30
+--free-rounds 20`で1プロセス・1 (seed, age)単位あたり約0.31秒(12節のスクリプトが
+行うSELF/POP用100手の系列構築・widest path/辺の重み/ノード出現率のブートストラップを
+一切行わないため、12節の同等の見積もりよりずっと軽い——moves.csv.gzも読まない)。
+70 seed×81時点÷`--workers 5` ≈ **約6分**。年代ごとにpickleキャッシュするので
+(`_age_cache_selfplay_recovery_by_depth/`、`.gitignore`対象)、中断しても同じコマンドで
+再開できる。メモリは12節と同様、1GB未満の見込み。
+
+### 13-2. 進捗・再開
+
+```bash
+ps aux | grep export_markov_selfplay_recovery_by_depth | grep -v grep
+tail -40 logs/selfplay_recovery_by_depth.log
+```
+
+### 13-3. 結果の確認・push
+
+書き出されるファイル:
+- `scripts/output/figures/markov_selfplay_recovery_time_by_depth.csv`
+- `scripts/output/figures/markov_depth1_wsls_rule_fraction.csv`
+
+```bash
+git branch --show-current   # claude/markov-production-analysis を確認
+git status --short
+git add scripts/output/figures/markov_selfplay_recovery_time_by_depth.csv \
+        scripts/output/figures/markov_depth1_wsls_rule_fraction.csv
+git commit -m "Recovery-time by memory-depth group + depth-1 WSLS-rule fraction"
+git push -u origin claude/markov-production-analysis
+```
+
+(この2ファイル以外は変更されないはず——`markov_edge_weights.json`・`markov_node_freq.json`・
+12節の4ファイルを含め`git status --short`に出てこないことを確認すること。
+`_age_cache_selfplay_recovery_by_depth/`は`.gitignore`対象なので出ないはず。)

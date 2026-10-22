@@ -194,3 +194,68 @@ TFTとWSLSはどちらも`rate_recovery_undefined`が高いという意味では
    ——この「先に動かない」性質が、進化した個体がどんな回復戦略を持っていてもTFT相手には
    発動しにくくする(5.1節でTFT相手のmean_recoveryが低いこと、5.3節でTFT相手の未回復率が
    他の3相手の約1.6〜1.7倍高いことの両方と整合する)。
+
+## 6. 記憶の深さ別の回復時間、およびWSLS規則を持つ記憶深さ1個体の割合(探索的・事前登録外)
+
+5.3節の「底からの回復時間」を、ビューア(10節・11節)で使っているのと同じ3つの実効記憶深さ群
+(depthLow/depthMid/depthHigh)に分けて世代ごとに見る。あわせて、各世代で記憶の深さ1(名目上の
+`memory_depth==1`)の個体のうち、規則そのものがWSLSの win-stay-lose-shift(`pavlov_table()`の
+テーブル`[1,0,0,1]`=「前回が和か搾なら同じ手、惨か底なら手を変える」)と一致する個体の頻度
+加重割合を求める。
+
+### 6.1 方法
+
+使用コード:`scripts/export_markov_selfplay_recovery_by_depth.py`(新規)。
+
+- **回復時間の深さ別集計**:`probe.recovery_time_from_forced_bottom`を、既存の
+  5.3節と**完全に同じ定義**(最初の3回を底底底に固定→20回自由対戦→2連続CCの最初の手番、
+  相手はTFT・SELF・POP・WSLS)で再計算するが、今回は焦点の個体の**実効記憶深さ**
+  (`evopersonality_abm.lindgren.effective_memory_depth`)で結果をdepthLow/depthMid/depthHigh
+  に分けて集計する(`export_markov_edge_weights_for_viewer.depth_ranges`をそのまま再利用、
+  **ビューアと同じ`--depth-cutpoints`**を使うこと)。POPの相手は深さ群で絞らず、常に
+  **集団全体**から頻度加重で選ぶ(焦点の個体側の深さだけで結果を分類する)。
+- **なぜ既存のキャッシュをそのまま読めないか**:`export_markov_selfplay_recovery.py`の
+  `_age_cache_selfplay/`は、`process_one_age`が`summarize_recovery_times`で個体ごとの
+  回復時間を**世代内で即座にプールしてしまう**ため、個体の深さを後から取り出せる形では
+  保存されていない。深さ別に分けるには同じ`census`から回復時間を**再計算**する必要がある
+  ——ただし**新たな進化は一切行わず**、既存の本番census(`seed_X_probe_age_G_census.csv.gz`、
+  8〜9節で確定済み)を読むだけで、SELF/POP用の100手の系列構築やwidest path・辺の重み・
+  ノード出現率のブートストラップ(5節の処理時間の大部分を占めていた部分)は一切行わない
+  ため、**5節のスクリプトより大幅に軽い**(6.2節参照)。
+- **記憶深さ1・WSLS規則の割合**:対戦シミュレーションを一切行わない、census記録のみの
+  集計。各(seed, age)のcensusで`table.memory_depth==1`(名目上の深さ1、2^(2×1)=4要素の
+  ルックアップテーブル)の個体を数え、そのうち`table.table == (1,0,0,1)`(prehistoryは
+  問わない——「同じ規則」は4通りの場面すべてで同じ手を返すことを指し、対戦開始前の
+  仮定履歴の違いは問わない)と完全一致する個体の頻度を数える。全70 seedをプールした
+  頻度加重割合として世代ごとに報告する。
+  (注:これは`effective_memory_depth`に基づくビューアの3群とは**別の基準**であり、
+  `duplicate_memory`で深さ2以上に増えた「実効的にはWSLSと同じ」個体はこの集計には
+  含まれない——名目上のテーブルが4要素のままWSLSと一致する個体だけを数える。)
+
+### 6.2 単体テスト・スモークテスト
+
+`tests/test_export_markov_selfplay_recovery_by_depth.py`(15件、全合格)。全体テストスイート
+(`python3 -m pytest -q`)418件合格を確認済み。パイロットデータ(`markov_sweep_pilot_noise00`、
+10 seed)で本番と同じ`--probe-repeats 30 --free-rounds 20`による実行を確認し、1(seed,age)
+単位あたり約0.31秒(5節のSELF/POP系列構築・widest path集計を含むスクリプトの約1/10の
+コスト——このスクリプトは対戦シミュレーション自体は同程度の回数行うが、100手のSELF/POP系列
+構築や200回のブートストラップ集計を一切行わないため)。キャッシュの再開(同じコマンドを
+2回実行して2回目が即座に完了すること)も確認済み。
+
+### 6.3 Mac本番実行
+
+手順・所要時間の見積もりは`docs/MARKOV_STRUCTURE_EVOLUTION_MAC_RUNBOOK.md`13節を参照。
+
+### 6.4 結果
+
+**(Macでの本番実行待ち。実行後、このセクションに以下を追記する:)**
+
+- `markov_selfplay_recovery_time_by_depth.csv`:depthLow/depthMid/depthHigh×TFT/SELF/
+  POP/WSLSの、世代ごとのnever_recovered_rate・median_recovery_round。もし深さが浅い
+  (depthLow)個体ほどTFT相手で回復しにくい/しやすいといった傾向があれば、記憶の深さと
+  回復力の関係について追記する。5.3節の深さを分けない結果(TFT: never_recovered_rate
+  0.858)と比べ、どの深さ群がこの平均を主に支えているかを確認する。
+- `markov_depth1_wsls_rule_fraction.csv`:世代ごとの、記憶深さ1個体中のWSLS規則一致率。
+  進化の過程でこの割合が増加・減少・一定のいずれかを報告する(増加していれば、WSLS型の
+  回復規則そのものが選択されている可能性を示唆するが、これは探索的な観察であり、
+  適応度への因果的な寄与を主張するものではない)。
