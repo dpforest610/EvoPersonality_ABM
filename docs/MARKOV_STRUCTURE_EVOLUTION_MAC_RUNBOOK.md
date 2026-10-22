@@ -752,3 +752,38 @@ git push -u origin claude/markov-production-analysis
 
 (`markov_edge_weights.json`は10〜30MB程度見込みなので、pushに時間がかかる場合がある。
 `_age_cache_edge_weights/`は`.gitignore`対象なので`git status --short`に出ないはず。)
+
+### 11-5. (任意)ノードの出現率の追加書き出し(探索的・事前登録外)
+
+`--nodes-only`を付けて**同じ引数で**再実行すると、辺の重みではなく、各3-gramの出現率
+(その3-gramを含む仮想参加者の割合、200回の抽出で平均)を書き出す。**11-1の辺の重みの
+書き出しと完全に同じ乱数の流れ(同じ`--master-seed`・世代ごとの乱数・同じ抽出順序)を
+使うので、11-1と同じ引数で実行すれば、既にpush済みの`markov_edge_weights.json`が使った
+のと同一の200回の抽出から出現率を計算する**(`markov_edge_weights.json`自体は一切
+読み書きしない — 値は変わらない)。
+
+```bash
+venv/bin/python scripts/export_markov_edge_weights_for_viewer.py \
+  --data-dir scripts/output/markov_sweep_production_noise01 \
+  --gradual-reprobe-dir scripts/output/markov_sweep_production_noise01_gradual_reprobe \
+  --moves-suffix noise0p01 \
+  --probe-noise-rate 0.01 \
+  --depth-cutpoints "D1,D2" \
+  --nodes-only \
+  --out-path scripts/output/figures/markov_edge_weights.json
+```
+
+(`--depth-cutpoints`は11-1と同じ値を指定する。`--out-path`も11-1と同じ値を渡すが、
+`--nodes-only`時はこのパスは読み書きされず、代わりにその**同じフォルダ**に
+`markov_node_freq.json`が書かれる。キャッシュは`_age_cache_node_freq/`で、
+11-1の`_age_cache_edge_weights/`とは別。)
+
+所要時間は11-1とほぼ同じ(同じI/O・同じ回数のブートストラップ抽出を行うため)。
+
+pushするファイル:
+
+```bash
+git add scripts/output/figures/markov_node_freq.json
+git commit -m "Add ABM node-appearance-rate JSON for the Markov network viewer"
+git push -u origin claude/markov-production-analysis
+```

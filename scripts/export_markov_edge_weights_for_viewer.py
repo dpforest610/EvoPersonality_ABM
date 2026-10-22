@@ -45,6 +45,22 @@ x 101 ages x ~320 possible edges =~ 646k edge-records; in practice most
 Jaccard, and many depth-group timepoints will be entirely omitted
 (insufficient seeds). Expect roughly 10-30MB for the whole JSON file.
 
+--nodes-only (section 12, exploratory, outside preregistration): instead
+of edge weights, writes <out-path's directory>/markov_node_freq.json
+with each vocab 3-gram's appearance rate -- the fraction of the 200
+drawn virtual participants whose own 3-gram set contains that word at
+least once, averaged over all 200 draws (a draw where nobody has the
+word contributes 0). Uses the SAME per-age RNG stream and the SAME
+cross_lineage-then-3-depth-groupings draw order as the edge-weight
+export (process_one_age_nodes mirrors process_one_age exactly), so
+running this against the same arguments as a prior (non---nodes-only)
+run reproduces the identical 200 draws that produced that run's
+edge-weights JSON. Schema:
+{"abm_nodes": {opponent: {grouping: {age: {node: rate}}}}}
+Does not read, write, or touch the edge-weights JSON at --out-path, and
+uses a separate age cache (_age_cache_node_freq/, vs. the edge export's
+_age_cache_edge_weights/).
+
 Usage: see docs/MARKOV_STRUCTURE_EVOLUTION_MAC_RUNBOOK.md section 11.
 """
 
@@ -54,7 +70,7 @@ import pickle
 import random
 import sys
 import time
-from collections import defaultdict
+from collections import Counter, defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -68,7 +84,12 @@ REPO_ROOT = SCRIPTS_DIR.parent
 sys.path.insert(0, str(REPO_ROOT))
 
 from evopersonality_abm.lindgren import LindgrenTable, effective_memory_depth  # noqa: E402
-from evopersonality_abm.markov_apply import OPPONENT_INFO, load_human_weights, resample_cross_seed_group  # noqa: E402
+from evopersonality_abm.markov_apply import (  # noqa: E402
+    OPPONENT_INFO,
+    load_human_weights,
+    resample_cross_seed_group,
+    series_to_word_set,
+)
 from evopersonality_abm.markov_recovery import build_edges, load_vocab, self_loop_edges  # noqa: E402
 
 GROUP_OPPONENTS = ["TFT", "AllC", "AllD", "Random", "Gradual"]
@@ -179,6 +200,105 @@ def age_cache_path(cache_dir: Path, age: int) -> Path:
     return cache_dir / f"age_{age}.pkl"
 
 
+def node_appearance_rates_over_draws(pool: Dict[int, tuple], vocab, group_size: int, n_draws: int, rng: random.Random) -> Optional[Dict[str, float]]:
+    """--nodes-only (section 12): for every vocab word, the fraction of
+    the group_size drawn virtual participants whose 3-gram set (same
+    per-participant parsing as build_edges, via series_to_word_set)
+    contains that word at least once, averaged over n_draws draws (a
+    draw where nobody has the word contributes 0). Consumes exactly one
+    resample_cross_seed_group(pool, group_size, rng) call per draw --
+    the same call, with the same arguments, that average_edges_over_draws
+    makes -- so calling this in the same position in the same per-age
+    rng stream as the edge-weight export reproduces the IDENTICAL draws."""
+    if len(pool) < group_size:
+        return None
+    sums: Dict[str, float] = {word: 0.0 for word in vocab}
+    for _ in range(n_draws):
+        series, _idents = resample_cross_seed_group(pool, group_size, rng)
+        counts: Counter = Counter()
+        for s in series:
+            counts.update(series_to_word_set(s, vocab))
+        for word in vocab:
+            sums[word] += counts.get(word, 0) / group_size
+    return {word: round(sums[word] / n_draws, 4) for word in vocab}
+
+
+def process_one_age_nodes(
+    data_dir_str: str, gradual_reprobe_dir_str: str, moves_suffix: str, probe_noise_rate: float,
+    age: int, seeds: List[int], d1: int, d2: int, max_depth: int, group_size: int, n_draws: int,
+    master_seed: str,
+) -> dict:
+    """Mirrors process_one_age's exact control flow and RNG consumption
+    order (same per-age seed f"{master_seed}_{age}", same pool loading,
+    same opponent loop, same cross_lineage-then-3-depth-groupings order)
+    so that, run with the SAME arguments as the edge-weight export, it
+    draws the IDENTICAL 200 cross-lineage groups per (opponent, age,
+    grouping) -- just computing each 3-gram's appearance rate from them
+    instead of edge Jaccards. Never reads or writes anything related to
+    the edge-weights output, and process_one_age itself is untouched, so
+    the existing edge-weights JSON's values cannot change."""
+    data_dir, gradual_reprobe_dir = Path(data_dir_str), Path(gradual_reprobe_dir_str)
+    ranges = depth_ranges(d1, d2, max_depth)
+    vocabs = {opp: load_vocab(OPPONENT_INFO[opp][1]) for opp in GROUP_OPPONENTS}
+    rng = random.Random(f"{master_seed}_{age}")
+
+    seeds_with_opp_by_opponent = seeds_with_opp_by_opponent_for_age(
+        data_dir, gradual_reprobe_dir, moves_suffix, probe_noise_rate, age, seeds
+    )
+
+    by_opponent: Dict[str, Dict[str, Optional[Dict[str, float]]]] = {}
+    for opponent in GROUP_OPPONENTS:
+        seeds_with_opp = seeds_with_opp_by_opponent[opponent]
+        vocab = vocabs[opponent]
+        rates_by_grouping: Dict[str, Optional[Dict[str, float]]] = {}
+
+        rates_by_grouping["cross_lineage"] = node_appearance_rates_over_draws(seeds_with_opp, vocab, group_size, n_draws, rng)
+
+        for grouping in DEPTH_GROUPINGS:
+            restricted = filter_pool_by_depth(seeds_with_opp, ranges[grouping])
+            rates_by_grouping[grouping] = node_appearance_rates_over_draws(restricted, vocab, group_size, n_draws, rng)
+
+        by_opponent[opponent] = rates_by_grouping
+
+    return {"age": age, "by_opponent": by_opponent}
+
+
+def build_abm_nodes_section(
+    data_dir: Path, gradual_reprobe_dir: Path, moves_suffix: str, probe_noise_rate: float,
+    ages: List[int], seeds: List[int], d1: int, d2: int, max_depth: int,
+    group_size: int, n_draws: int, master_seed: str, workers: int, cache_dir: Path,
+) -> Dict[str, Dict[str, Dict[int, Dict[str, float]]]]:
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    pending = [a for a in ages if not age_cache_path(cache_dir, a).exists()]
+    print(f"{len(ages) - len(pending)}/{len(ages)} ages already cached, {len(pending)} pending", flush=True)
+
+    t0 = time.time()
+    with ProcessPoolExecutor(max_workers=workers) as ex:
+        futures = {
+            ex.submit(
+                process_one_age_nodes, str(data_dir), str(gradual_reprobe_dir), moves_suffix, probe_noise_rate,
+                age, seeds, d1, d2, max_depth, group_size, n_draws, master_seed,
+            ): age
+            for age in pending
+        }
+        for fut in as_completed(futures):
+            age = futures[fut]
+            result = fut.result()
+            with open(age_cache_path(cache_dir, age), "wb") as f:
+                pickle.dump(result, f)
+            print(f"age={age} done, elapsed={time.time() - t0:.0f}s", flush=True)
+
+    out: Dict[str, Dict[str, Dict[int, Dict[str, float]]]] = {opp: {g: {} for g in GROUPINGS} for opp in GROUP_OPPONENTS}
+    for age in ages:
+        with open(age_cache_path(cache_dir, age), "rb") as f:
+            result = pickle.load(f)
+        for opponent, rates_by_grouping in result["by_opponent"].items():
+            for grouping, rates in rates_by_grouping.items():
+                if rates is not None:
+                    out[opponent][grouping][age] = rates
+    return out
+
+
 def build_abm_section(
     data_dir: Path, gradual_reprobe_dir: Path, moves_suffix: str, probe_noise_rate: float,
     ages: List[int], seeds: List[int], d1: int, d2: int, max_depth: int,
@@ -233,13 +353,38 @@ def main():
     p.add_argument("--n-draws", type=int, default=200)
     p.add_argument("--master-seed", type=str, default="markov_edge_weights_viewer_v1")
     p.add_argument("--workers", type=int, default=5)
-    p.add_argument("--out-path", type=str, required=True)
+    p.add_argument("--out-path", type=str, required=True, help="edge-weights output path; also used to derive the sibling markov_node_freq.json path under --nodes-only")
+    p.add_argument(
+        "--nodes-only", action="store_true",
+        help="compute ONLY node appearance rates (section 12, exploratory) instead of edge weights. "
+        "Writes <out-path's directory>/markov_node_freq.json and leaves --out-path itself untouched "
+        "(does not read, write, or recompute the edge-weights JSON). Uses the identical per-age RNG "
+        "stream and draw order as the edge-weight export, so re-running with this flag against the "
+        "same arguments reproduces the exact same 200 cross-lineage draws that produced the "
+        "already-written edge-weights JSON.",
+    )
     args = p.parse_args()
 
     d1, d2 = (int(x) for x in args.depth_cutpoints.split(","))
     seeds = list(range(args.seed_offset, args.seed_offset + args.seeds))
     ages = list(range(args.generations_start, args.generations_end + 1, args.probe_interval))
     out_path = Path(args.out_path)
+
+    if args.nodes_only:
+        node_out_path = out_path.parent / "markov_node_freq.json"
+        node_cache_dir = out_path.parent / "_age_cache_node_freq"
+        abm_nodes_section = build_abm_nodes_section(
+            Path(args.data_dir), Path(args.gradual_reprobe_dir), args.moves_suffix, args.probe_noise_rate,
+            ages, seeds, d1, d2, args.max_depth, args.group_size, args.n_draws, args.master_seed,
+            args.workers, node_cache_dir,
+        )
+        node_payload = {"abm_nodes": abm_nodes_section}
+        node_out_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(node_out_path, "w", encoding="utf-8") as f:
+            json.dump(node_payload, f, ensure_ascii=False, separators=(",", ":"))
+        print(f"wrote {node_out_path} ({node_out_path.stat().st_size / 1e6:.1f} MB)", flush=True)
+        return
+
     cache_dir = out_path.parent / "_age_cache_edge_weights"
 
     human_section = build_human_section(Path(args.human_weights))
