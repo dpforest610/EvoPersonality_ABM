@@ -949,7 +949,7 @@ git push -u origin claude/markov-production-analysis
 反復順が、実行プロセスごとにランダム化される文字列ハッシュに依存していたため
 (`write_widest_path_csv`の列名の組み立てと、`node_appearance_rates_over_draws`の
 語彙の反復)。両方とも、常に同じ(ソート済みの)順になるよう修正済み(コミット
-`<この修正のコミットを参照>`)。あわせて、各スクリプトの`run_all_ages`で、CSVに
+`b065cff7`)。あわせて、各スクリプトの`run_all_ages`で、CSVに
 書き出す前に行自体も明示的にキー列(opponent・depth_group・age・seedなど)で
 並べ替えるようにした。**この修正により、同じデータに対して同じコマンドを何度実行
 しても、出力ファイルは(行・列とも)毎回バイト単位で完全に同一になることを、
