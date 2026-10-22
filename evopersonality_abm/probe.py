@@ -93,3 +93,26 @@ def run_probe_duel(
     opponent = Agent("opponent", make_opponent_strategy(opponent_name, rng))
     run_duel(focal, opponent, rounds=rounds, noise_rate=noise_rate, rng=rng)
     return focal.history_self, opponent.history_self
+
+
+def run_selfplay_duel(
+    focal_table: LindgrenTable,
+    partner_table: LindgrenTable,
+    rng: random.Random,
+    rounds: int = 100,
+    noise_rate: float = 0.0,
+) -> Tuple[List[str], List[str]]:
+    """Exploratory, outside preregistration (docs/EXPLORATORY_selfplay_recovery.md):
+    one duel between two EVOLVED LindgrenTables -- focal_table (using its
+    own prehistory, same convention as run_probe_duel) against
+    partner_table (likewise its own prehistory; for a "SELF" duel,
+    partner_table IS focal_table -- two independent Agent instances
+    wrapping the same table, which is safe since LindgrenTable.decide()
+    is a pure function of the history each Agent tracks itself; for a
+    "POP" duel, partner_table is a different genotype drawn from the same
+    (seed, age) population). Returns (own_moves, opp_moves), each length
+    `rounds`, from focal_table's point of view."""
+    focal = Agent("focal", focal_table.as_strategy())
+    partner = Agent("partner", partner_table.as_strategy())
+    run_duel(focal, partner, rounds=rounds, noise_rate=noise_rate, rng=rng)
+    return focal.history_self, partner.history_self

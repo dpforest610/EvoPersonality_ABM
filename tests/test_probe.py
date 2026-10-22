@@ -15,6 +15,7 @@ from evopersonality_abm.probe import (
     genotype_key,
     make_opponent_strategy,
     run_probe_duel,
+    run_selfplay_duel,
 )
 
 
@@ -159,4 +160,55 @@ def test_run_probe_duel_noise_rate_can_change_realized_moves():
     genome = always_defect_table()
     clean = run_probe_duel(genome, "AllC", random.Random(0), rounds=10, noise_rate=0.0)
     noisy = run_probe_duel(genome, "AllC", random.Random(0), rounds=10, noise_rate=1.0)
+    assert clean != noisy
+
+
+# ------------------------------------------------------------------ run_selfplay_duel
+# (exploratory, outside preregistration -- docs/EXPLORATORY_selfplay_recovery.md)
+
+def test_run_selfplay_duel_self_mutual_tit_for_tat_cooperates_forever():
+    table = tit_for_tat_table()
+    own_moves, opp_moves = run_selfplay_duel(table, table, random.Random(0), rounds=10)
+    assert own_moves == ["C"] * 10
+    assert opp_moves == ["C"] * 10
+
+
+def test_run_selfplay_duel_self_uses_two_independent_agents_not_shared_state():
+    # two SEPARATE Agents wrapping the same table must not share history --
+    # mirrors run_probe_duel's own prehistory-driven, no-shared-state design
+    table = always_defect_table()
+    own_moves, opp_moves = run_selfplay_duel(table, table, random.Random(0), rounds=5)
+    assert own_moves == ["D"] * 5
+    assert opp_moves == ["D"] * 5
+
+
+def test_run_selfplay_duel_pop_uses_the_partner_tables_own_prehistory():
+    focal = tit_for_tat_table()  # prehistory [1,1] -- assumes prior mutual cooperation
+    partner = always_defect_table()  # prehistory [0,0] -- assumes prior mutual defection
+    own_moves, opp_moves = run_selfplay_duel(focal, partner, random.Random(0), rounds=3)
+    # TFT vs AllD: TFT cooperates round 1 (per its own prehistory) then
+    # mirrors AllD's constant defection -- identical behavior to probing
+    # against the fixed "AllD" opponent (run_probe_duel), confirming
+    # partner_table's own prehistory is honored exactly like a fixed table.
+    assert own_moves == ["C", "D", "D"]
+    assert opp_moves == ["D", "D", "D"]
+
+
+def test_run_selfplay_duel_returns_equal_length_move_lists():
+    table = tit_for_tat_table()
+    own_moves, opp_moves = run_selfplay_duel(table, table, random.Random(0), rounds=20)
+    assert len(own_moves) == 20 and len(opp_moves) == 20
+
+
+def test_run_selfplay_duel_is_deterministic_given_the_same_rng_seed():
+    focal, partner = tit_for_tat_table(), always_defect_table()
+    out_a = run_selfplay_duel(focal, partner, random.Random(7), rounds=10, noise_rate=0.3)
+    out_b = run_selfplay_duel(focal, partner, random.Random(7), rounds=10, noise_rate=0.3)
+    assert out_a == out_b
+
+
+def test_run_selfplay_duel_noise_rate_can_change_realized_moves():
+    focal, partner = always_defect_table(), always_defect_table()
+    clean = run_selfplay_duel(focal, partner, random.Random(0), rounds=10, noise_rate=0.0)
+    noisy = run_selfplay_duel(focal, partner, random.Random(0), rounds=10, noise_rate=1.0)
     assert clean != noisy
