@@ -1,0 +1,20 @@
+{
+  "threshold_kself": 0.7308932712540168,
+  "threshold_kout": 0.43197470371646335,
+  "n_total": 2000,
+  "seeds": [
+    100,
+    101,
+    102,
+    103
+  ],
+  "ages_pooled": [
+    1000,
+    1050,
+    1100,
+    1150,
+    1200
+  ],
+  "min_generation": 1000,
+  "note": "Pooled median across all probed seeds and ages >= min_generation, from this run's own coupling_markov_pilot census files -- NOT the spatial N=1000 model's thresholds (0.7770470/0.5025085), which come from an unrelated population (docs/K_MODEL_MARKOV_DESIGN.md section 3)."
+}
