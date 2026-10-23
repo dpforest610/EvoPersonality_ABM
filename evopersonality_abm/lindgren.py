@@ -27,6 +27,7 @@ and provides two mutation operators on it:
     quadrants encoded.
 """
 
+import itertools
 from typing import Callable, List, Sequence, Tuple
 
 from .game import COOPERATE, DEFECT
@@ -159,6 +160,50 @@ def split_memory(table: LindgrenTable) -> LindgrenTable:
 
     new_prehistory = list(table.prehistory[1:m]) + list(table.prehistory[m + 1 :])
     return LindgrenTable(memory_depth=new_m, table=new_table, prehistory=new_prehistory)
+
+
+def _table_ignores_oldest_round(table: LindgrenTable) -> bool:
+    """True if `table`'s decisions never depend on the single oldest
+    remembered round (own move and opponent move alike) -- i.e. the table
+    is losslessly foldable to memory_depth - 1 via `split_memory`, the
+    exact reverse of what `duplicate_memory` adds. Ported from
+    `claude/markov-production-analysis` (added there for
+    `effective_memory_depth` below).
+
+    Checked via the public `decide` API with an explicit length-m history
+    for both sides (not by inspecting table.table's bit layout directly),
+    so it needs no assumption about _table_index's internals and is
+    unaffected by prehistory (decide() never consults prehistory once the
+    given history already has >= memory_depth entries -- see
+    `_table_index`'s `[-m:]` slice)."""
+    m = table.memory_depth
+    if m == 0:
+        return False  # nothing left to fold
+    new_m = m - 1
+    for own_suffix in itertools.product((DEFECT, COOPERATE), repeat=new_m):
+        for opp_suffix in itertools.product((DEFECT, COOPERATE), repeat=new_m):
+            decisions = {
+                table.decide([own_oldest] + list(own_suffix), [opp_oldest] + list(opp_suffix))
+                for own_oldest in (DEFECT, COOPERATE)
+                for opp_oldest in (DEFECT, COOPERATE)
+            }
+            if len(decisions) > 1:
+                return False
+    return True
+
+
+def effective_memory_depth(table: LindgrenTable) -> int:
+    """The minimal memory depth `table` can be losslessly folded to by
+    repeatedly checking `_table_ignores_oldest_round` and folding with
+    `split_memory` -- i.e. how much of the genome's nominal memory_depth
+    is actually used, independent of how it got there (duplication,
+    mutation, or both). Ported from `claude/markov-production-analysis`
+    (used there by the depth-stratified recovery analysis; needed here
+    for docs/PREREGISTRATION_k_model_markov.md's H-C depth strata)."""
+    current = table
+    while current.memory_depth > 0 and _table_ignores_oldest_round(current):
+        current = split_memory(current)
+    return current.memory_depth
 
 
 def point_mutate(table: LindgrenTable, index: int) -> LindgrenTable:

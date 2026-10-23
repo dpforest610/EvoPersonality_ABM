@@ -19,6 +19,7 @@ venv/
 .venv/
 logs/
 scripts/output/**/*_checkpoint.pkl.tmp
-scripts/output/coupling_markov_pilot/*_census.csv.gz
-scripts/output/coupling_markov_pilot/*_moves.csv.gz
-scripts/output/coupling_markov_pilot/*_recovery.csv.gz
+scripts/output/coupling_markov_*/*_census.csv.gz
+scripts/output/coupling_markov_*/*_moves.csv.gz
+scripts/output/coupling_markov_*/*_recovery.csv.gz
+scripts/output/k_model_confirmatory_*/_age_cache/
