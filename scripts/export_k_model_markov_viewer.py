@@ -1,5 +1,8 @@
-"""Per-type (白/青/緑/ピンク + combined Mix) Markov-network viewer export
-for the K-model pilot -- docs/K_MODEL_MARKOV_DESIGN.md section 8-6.
+"""Per-type (K-安定型/K-拒絶型/K-とらわれ型/K-恐れ型 + combined Mix) Markov-network
+viewer export for the K-model pilot -- docs/K_MODEL_MARKOV_DESIGN.md section 8-6.
+Type naming convention: docs/PREREGISTRATION_k_model_markov.md section 1-1
+(colors are for figure legends only; code identifiers are K_Secure/
+K_Dismissing/K_Preoccupied/K_Fearful).
 
 Reuses evopersonality_abm/markov_recovery.py and markov_apply.py
 UNCHANGED (section 6-1 of the design memo: "相手がKモデルの個体でも...
@@ -78,31 +81,33 @@ OPPONENT_VOCAB = {name: spec["vocab"] for name, spec in OPPONENTS.items()}
 OPPONENT_VOCAB["SELF"] = "RAN"
 OPPONENT_VOCAB["POP"] = "RAN"
 
-TYPES = ["White", "Blue", "Green", "Pink"]
-TYPE_TO_HUMAN = {"White": "Secure", "Blue": "Mix", "Green": "Mix", "Pink": "Fearful"}
+TYPES = ["K_Secure", "K_Dismissing", "K_Preoccupied", "K_Fearful"]
+TYPE_TO_HUMAN = {"K_Secure": "Secure", "K_Dismissing": "Mix", "K_Preoccupied": "Mix", "K_Fearful": "Fearful"}
 # docs/K_MODEL_MARKOV_DESIGN.md section 8-1 point 5: no single human-group
-# size applies to Blue/Green individually (they only become "Mix"-sized
-# once merged) -- use that merged target size for each anyway, for a
-# consistent default (not mandated by Annen's decision, documented here).
-TYPE_GROUP_SIZE = {"White": HUMAN_GROUP_SIZES["Secure"], "Blue": HUMAN_GROUP_SIZES["Mix"], "Green": HUMAN_GROUP_SIZES["Mix"], "Pink": HUMAN_GROUP_SIZES["Fearful"]}
+# size applies to K_Dismissing/K_Preoccupied individually (they only become
+# "Mix"-sized once merged) -- use that merged target size for each anyway,
+# for a consistent default (not mandated by Annen's decision, documented here).
+TYPE_GROUP_SIZE = {"K_Secure": HUMAN_GROUP_SIZES["Secure"], "K_Dismissing": HUMAN_GROUP_SIZES["Mix"], "K_Preoccupied": HUMAN_GROUP_SIZES["Mix"], "K_Fearful": HUMAN_GROUP_SIZES["Fearful"]}
 CAVEAT_TEXT = "中央値で無理やり分けた型であり、集団は連続した一つの雲"
 
 
 def classify_type(k_out: float, k_self: float, threshold_kout: float, threshold_kself: float) -> str:
-    """白=高K_self・高K_out、青=高K_self・低K_out、緑=低K_self・高K_out、
-    ピンク=低K_self・低K_out (docs/K_MODEL_MARKOV_DESIGN.md section 8-1 point 5,
-    ties go to the "high" side, matching numpy.median's own convention of
-    an exact-median value landing on neither side specifically -- an
-    arbitrary but harmless choice at continuous-valued K)."""
+    """K-安定型(K_Secure)=高K_self・高K_out、K-拒絶型(K_Dismissing)=高K_self・低K_out、
+    K-とらわれ型(K_Preoccupied)=低K_self・高K_out、K-恐れ型(K_Fearful)=低K_self・低K_out
+    (docs/K_MODEL_MARKOV_DESIGN.md section 8-1 point 5; naming convention:
+    docs/PREREGISTRATION_k_model_markov.md section 1-1. Ties go to the "high"
+    side, matching numpy.median's own convention of an exact-median value
+    landing on neither side specifically -- an arbitrary but harmless choice
+    at continuous-valued K)."""
     high_self = k_self >= threshold_kself
     high_out = k_out >= threshold_kout
     if high_self and high_out:
-        return "White"
+        return "K_Secure"
     if high_self and not high_out:
-        return "Blue"
+        return "K_Dismissing"
     if not high_self and high_out:
-        return "Green"
-    return "Pink"
+        return "K_Preoccupied"
+    return "K_Fearful"
 
 
 def load_census_with_k(path: Path) -> List[Tuple[int, int, int, str, str, float, float]]:
@@ -298,8 +303,8 @@ def process_one_age(
                 seed_pools.append(build_seed_pool_for_type(census, series_for_opp, type_name, threshold_kout, threshold_kself))
             type_pools[type_name] = merge_pools_across_seeds(seed_pools)
 
-        # combined Mix (Blue+Green) for human comparison, decision 5
-        type_pools["Mix"] = merge_pools_across_seeds([type_pools["Blue"], type_pools["Green"]])
+        # combined Mix (K_Dismissing+K_Preoccupied) for human comparison, decision 5
+        type_pools["Mix"] = merge_pools_across_seeds([type_pools["K_Dismissing"], type_pools["K_Preoccupied"]])
 
         for grouping, pool in type_pools.items():
             gs = HUMAN_GROUP_SIZES.get(TYPE_TO_HUMAN.get(grouping, ""), TYPE_GROUP_SIZE.get(grouping, group_size)) if grouping != "Mix" else HUMAN_GROUP_SIZES["Mix"]
@@ -322,8 +327,9 @@ def process_one_age(
                 nodes_by_grouping.setdefault(opponent, {})[grouping] = rates
 
         # recovery time: pooled directly (no resampling), per type (not Mix -- Mix is
-        # a combined NETWORK view only; recovery pooling for Blue+Green individually
-        # already covers that population, a separate "Mix recovery" would double count)
+        # a combined NETWORK view only; recovery pooling for K_Dismissing+K_Preoccupied
+        # individually already covers that population, a separate "Mix recovery" would
+        # double count)
         for type_name in TYPES:
             rounds_for_type: List[Optional[int]] = []
             for seed, recovery in per_seed_recovery.items():

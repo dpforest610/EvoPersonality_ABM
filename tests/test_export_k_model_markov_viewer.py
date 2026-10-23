@@ -18,14 +18,14 @@ spec.loader.exec_module(mod)
 
 def test_classify_type_all_4_quadrants():
     # threshold_kout=0.5, threshold_kself=0.5
-    assert mod.classify_type(k_out=0.7, k_self=0.7, threshold_kout=0.5, threshold_kself=0.5) == "White"
-    assert mod.classify_type(k_out=0.3, k_self=0.7, threshold_kout=0.5, threshold_kself=0.5) == "Blue"
-    assert mod.classify_type(k_out=0.7, k_self=0.3, threshold_kout=0.5, threshold_kself=0.5) == "Green"
-    assert mod.classify_type(k_out=0.3, k_self=0.3, threshold_kout=0.5, threshold_kself=0.5) == "Pink"
+    assert mod.classify_type(k_out=0.7, k_self=0.7, threshold_kout=0.5, threshold_kself=0.5) == "K_Secure"
+    assert mod.classify_type(k_out=0.3, k_self=0.7, threshold_kout=0.5, threshold_kself=0.5) == "K_Dismissing"
+    assert mod.classify_type(k_out=0.7, k_self=0.3, threshold_kout=0.5, threshold_kself=0.5) == "K_Preoccupied"
+    assert mod.classify_type(k_out=0.3, k_self=0.3, threshold_kout=0.5, threshold_kself=0.5) == "K_Fearful"
 
 
 def test_classify_type_exact_threshold_goes_to_high_side():
-    assert mod.classify_type(k_out=0.5, k_self=0.5, threshold_kout=0.5, threshold_kself=0.5) == "White"
+    assert mod.classify_type(k_out=0.5, k_self=0.5, threshold_kout=0.5, threshold_kself=0.5) == "K_Secure"
 
 
 # ------------------------------------------------------------------ load_census_with_k / load_recovery
@@ -73,11 +73,11 @@ def test_load_recovery_parses_empty_string_as_none(tmp_path):
 
 def test_build_seed_pool_for_type_filters_by_classification():
     census = [
-        (0, 2, 1, "0,1,0,1", "1,1", 0.7, 0.7),  # White
-        (1, 1, 1, "1,0,1,0", "0,0", 0.3, 0.7),  # Blue
+        (0, 2, 1, "0,1,0,1", "1,1", 0.7, 0.7),  # K_Secure
+        (1, 1, 1, "1,0,1,0", "0,0", 0.3, 0.7),  # K_Dismissing
     ]
     series_by_genotype = {0: ["和和和,和和和。"], 1: ["底底底,底底底。"]}
-    pool = mod.build_seed_pool_for_type(census, series_by_genotype, "White", threshold_kout=0.5, threshold_kself=0.5)
+    pool = mod.build_seed_pool_for_type(census, series_by_genotype, "K_Secure", threshold_kout=0.5, threshold_kself=0.5)
     frequencies, filtered_series, identities = pool
     assert frequencies == {0: 2}
     assert 1 not in filtered_series
@@ -86,7 +86,7 @@ def test_build_seed_pool_for_type_filters_by_classification():
 
 def test_build_seed_pool_for_type_skips_genotype_with_no_series():
     census = [(0, 5, 1, "0,1,0,1", "1,1", 0.7, 0.7)]
-    pool = mod.build_seed_pool_for_type(census, {}, "White", threshold_kout=0.5, threshold_kself=0.5)
+    pool = mod.build_seed_pool_for_type(census, {}, "K_Secure", threshold_kout=0.5, threshold_kself=0.5)
     assert pool == ({}, {}, {})
 
 
@@ -107,7 +107,7 @@ def test_pool_size_counts_distinct_genotypes():
 # ------------------------------------------------------------------ summarize_recovery
 
 def test_summarize_recovery_computes_rate_and_median():
-    row = mod.summarize_recovery(1000, "TFT", "White", [2, 4, None, 2])
+    row = mod.summarize_recovery(1000, "TFT", "K_Secure", [2, 4, None, 2])
     assert row["n"] == 4
     assert row["n_recovered"] == 3
     assert row["median_recovery_round"] == 2
@@ -115,7 +115,7 @@ def test_summarize_recovery_computes_rate_and_median():
 
 
 def test_summarize_recovery_returns_none_for_empty_list():
-    assert mod.summarize_recovery(1000, "TFT", "White", []) is None
+    assert mod.summarize_recovery(1000, "TFT", "K_Secure", []) is None
 
 
 # ------------------------------------------------------------------ discover_ages
@@ -153,7 +153,7 @@ def test_process_one_age_end_to_end_tiny(tmp_path):
 
     result = mod.process_one_age(data_dir, 1000, [0, 1], threshold_kout, threshold_kself, group_size=3, n_draws=3, master_seed="test")
     assert result["age"] == 1000
-    assert len(result["type_count_rows"]) == 4  # White/Blue/Green/Pink
+    assert len(result["type_count_rows"]) == 4  # K_Secure/K_Dismissing/K_Preoccupied/K_Fearful
     assert sum(r["n_individuals"] for r in result["type_count_rows"]) == 20  # 10 genomes x 2 seeds
     assert set(result["edges_by_grouping"].keys()) <= set(mod.ALL_OPPONENTS)
 
