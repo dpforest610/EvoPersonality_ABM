@@ -1,0 +1,170 @@
+{
+  "ha": {
+    "rows": [
+      {
+        "hypothesis": "HA1_Secure",
+        "comparison": "r(K_Secure,Secure)-r(K_Secure,Mix)",
+        "point_diff": -0.04253724039844303,
+        "p_seedboot": 1.0,
+        "significant_holm": false
+      },
+      {
+        "hypothesis": "HA1_Secure",
+        "comparison": "r(K_Secure,Secure)-r(K_Secure,Fearful)",
+        "point_diff": -0.017725722559926493,
+        "p_seedboot": 1.0,
+        "significant_holm": false
+      },
+      {
+        "hypothesis": "HA2_Mix",
+        "comparison": "r(Mix,Mix)-r(Mix,Secure)",
+        "point_diff": 0.031658115760454686,
+        "p_seedboot": 0.0004997501249375312,
+        "significant_holm": true
+      },
+      {
+        "hypothesis": "HA2_Mix",
+        "comparison": "r(Mix,Mix)-r(Mix,Fearful)",
+        "point_diff": 0.011214618438212642,
+        "p_seedboot": 0.0009995002498750624,
+        "significant_holm": true
+      },
+      {
+        "hypothesis": "HA3_Fearful",
+        "comparison": "r(K_Fearful,Fearful)-r(K_Fearful,Secure)",
+        "point_diff": 0.03651819882412949,
+        "p_seedboot": 0.0004997501249375312,
+        "significant_holm": true
+      },
+      {
+        "hypothesis": "HA3_Fearful",
+        "comparison": "r(K_Fearful,Fearful)-r(K_Fearful,Mix)",
+        "point_diff": 0.024976222683658456,
+        "p_seedboot": 0.0004997501249375312,
+        "significant_holm": true
+      }
+    ],
+    "verdicts": {
+      "HA1_Secure": "支持されない",
+      "HA2_Mix": "支持",
+      "HA3_Fearful": "支持"
+    },
+    "permutation": [
+      {
+        "comparison": "r(Mix,Mix)-r(Mix,Fearful)",
+        "true_diff_window_avg": 0.010611505928377141,
+        "p_permutation": 0.000999000999000999
+      },
+      {
+        "comparison": "r(K_Fearful,Fearful)-r(K_Fearful,Secure)",
+        "true_diff_window_avg": 0.03629048290194827,
+        "p_permutation": 0.000999000999000999
+      },
+      {
+        "comparison": "r(K_Fearful,Fearful)-r(K_Fearful,Mix)",
+        "true_diff_window_avg": 0.024483071600374454,
+        "p_permutation": 0.000999000999000999
+      },
+      {
+        "comparison": "r(Mix,Mix)-r(Mix,Secure)",
+        "true_diff_window_avg": 0.031066750605870188,
+        "p_permutation": 0.000999000999000999
+      },
+      {
+        "comparison": "r(K_Secure,Secure)-r(K_Secure,Mix)",
+        "true_diff_window_avg": -0.04186404774570175,
+        "p_permutation": 1.0
+      },
+      {
+        "comparison": "r(K_Secure,Secure)-r(K_Secure,Fearful)",
+        "true_diff_window_avg": -0.01723446306258826,
+        "p_permutation": 0.000999000999000999
+      }
+    ]
+  },
+  "hb": {
+    "rows": [
+      {
+        "hypothesis": "HB1_SELF",
+        "comparison": "never_recovered_rate(K_Fearful,SELF)-never_recovered_rate(K_Secure,SELF)",
+        "point_diff": 0.09126232378660937,
+        "p_seedboot": 0.0004997501249375312,
+        "significant_holm": true
+      },
+      {
+        "hypothesis": "HB2_POP",
+        "comparison": "never_recovered_rate(K_Fearful,POP)-never_recovered_rate(K_Secure,POP)",
+        "point_diff": 0.08485477573227573,
+        "p_seedboot": 0.0009995002498750624,
+        "significant_holm": true
+      }
+    ],
+    "verdicts": {
+      "HB1_SELF": "支持",
+      "HB2_POP": "支持"
+    },
+    "permutation": [
+      {
+        "comparison": "never_recovered_rate(K_Fearful,SELF)-never_recovered_rate(K_Secure,SELF)",
+        "true_diff_window_avg": 0.09126232378660945,
+        "p_permutation": 0.000999000999000999
+      },
+      {
+        "comparison": "never_recovered_rate(K_Fearful,POP)-never_recovered_rate(K_Secure,POP)",
+        "true_diff_window_avg": 0.08485477573227582,
+        "p_permutation": 0.000999000999000999
+      }
+    ]
+  },
+  "hc": {
+    "rows": [
+      {
+        "hypothesis": "HC1",
+        "comparison": "depthLow",
+        "point_diff": -0.015236963442618379,
+        "p_seedboot": 0.7546226886556722,
+        "significant_holm": false
+      },
+      {
+        "hypothesis": "HC1",
+        "comparison": "depthMid",
+        "point_diff": 0.12627164383794298,
+        "p_seedboot": 0.0004997501249375312,
+        "significant_holm": true
+      },
+      {
+        "hypothesis": "HC1",
+        "comparison": "depthHigh",
+        "point_diff": 0.14650787457636583,
+        "p_seedboot": 0.0004997501249375312,
+        "significant_holm": true
+      }
+    ],
+    "verdicts": {
+      "HC1": "部分的に支持"
+    },
+    "permutation": [
+      {
+        "comparison": "depthLow",
+        "true_diff_window_avg": -0.015236963442618346,
+        "p_permutation": 0.000999000999000999
+      },
+      {
+        "comparison": "depthMid",
+        "true_diff_window_avg": 0.12627164383794304,
+        "p_permutation": 0.000999000999000999
+      },
+      {
+        "comparison": "depthHigh",
+        "true_diff_window_avg": 0.14650787457636583,
+        "p_permutation": 0.000999000999000999
+      }
+    ],
+    "testable_strata": [
+      "depthLow",
+      "depthMid",
+      "depthHigh"
+    ],
+    "untestable_strata": []
+  }
+}
