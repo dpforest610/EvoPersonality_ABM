@@ -179,3 +179,42 @@ def test_gid_effective_depth_handles_memory_depth_zero():
     assert depths[1] == mod.effective_memory_depth(t0)
     assert mod._parse_bits("") == []
     assert mod._parse_bits("1,0,1") == [1, 0, 1]
+
+
+def test_recovery_counts_by_label_matches_naive_row_scan():
+    # The pre-aggregated counts must equal a direct scan of every record,
+    # for true labels, weighted (bootstrap) seeds and permuted labels.
+    rng = random.Random(3)
+    types = ["K_Secure", "K_Fearful", "K_Dismissing", "K_Preoccupied"]
+    recovery_by_seed, depth_by_seed, label_by_seed = {}, {}, {}
+    for seed in range(5):
+        gids = list(range(15))
+        depth_by_seed[seed] = {g: rng.randint(0, 5) for g in gids}
+        label_by_seed[seed] = {g: rng.choice(types) for g in gids}
+        recovery_by_seed[seed] = [
+            (rng.choice(gids), rng.choice(["SELF", "POP", "TFT"]), r, rng.choice([None, 2, 5]))
+            for r in range(200)
+        ]
+    counts = mod.recovery_counts_by_gid(recovery_by_seed, depth_by_seed)
+    weights = {0: 2, 1: 0, 3: 1, 4: 3}
+    for w in (None, weights):
+        got = mod.recovery_counts_by_label(counts, label_by_seed, w)
+        for t in ("K_Secure", "K_Fearful"):
+            for opp in ("SELF", "POP"):
+                n = nr = 0
+                for seed, rows in recovery_by_seed.items():
+                    ww = 1 if w is None else w.get(seed, 0)
+                    for gid, o, _r, rr in rows:
+                        if o == opp and label_by_seed[seed][gid] == t:
+                            n += ww
+                            nr += ww * (rr is not None)
+                assert got.get((t, ("opp", opp)), (0, 0)) == (n, nr)
+            for stratum in mod.HC_STRATA:
+                n = nr = 0
+                for seed, rows in recovery_by_seed.items():
+                    ww = 1 if w is None else w.get(seed, 0)
+                    for gid, o, _r, rr in rows:
+                        if o == "SELF" and label_by_seed[seed][gid] == t and mod.depth_stratum(depth_by_seed[seed][gid]) == stratum:
+                            n += ww
+                            nr += ww * (rr is not None)
+                assert got.get((t, ("stratum", stratum)), (0, 0)) == (n, nr)

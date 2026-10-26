@@ -300,6 +300,68 @@ def gid_effective_depth(census) -> Dict[int, int]:
     return out
 
 
+
+# ------------------------------------------------------------------ recovery-count pre-aggregation
+#
+# H-B/H-C need, for many relabelings (true labels, 2000 seed-bootstrap
+# resamples, 1000 label permutations), the pooled (n, n_recovered) over all
+# recovery records of genotypes carrying a given type label. Re-scanning the
+# full record list (~1.7M rows per age at 70 seeds) for every relabeling made
+# a single age take hours. Instead, count once per (seed, genotype, key) --
+# key = ("opp", "SELF"|"POP") or ("stratum", <depth stratum>, SELF records
+# only) -- and sum those integer counts. The sums are exactly the same
+# integers the per-row scan produced, so every rate is bit-identical.
+
+def recovery_counts_by_gid(recovery_by_seed, depth_by_seed):
+    """{seed: {gid: {key: [n, n_recovered]}}}."""
+    out = {}
+    for seed, rows in recovery_by_seed.items():
+        per_gid = {}
+        depths = depth_by_seed[seed]
+        for gid, opp_name, _repeat, rr in rows:
+            keys = []
+            if opp_name in ("SELF", "POP"):
+                keys.append(("opp", opp_name))
+            if opp_name == "SELF" and gid in depths:
+                keys.append(("stratum", depth_stratum(depths[gid])))
+            if not keys:
+                continue
+            d = per_gid.setdefault(gid, {})
+            hit = 1 if rr is not None else 0
+            for k in keys:
+                c = d.get(k)
+                if c is None:
+                    d[k] = [1, hit]
+                else:
+                    c[0] += 1
+                    c[1] += hit
+        out[seed] = per_gid
+    return out
+
+
+def recovery_counts_by_label(counts_by_gid, label_by_seed, seed_weights=None):
+    """{(type_name, key): (n, n_recovered)} summed over seeds, each seed
+    weighted by seed_weights[seed] (default 1; 0/absent weight = skipped)."""
+    tot = {}
+    for seed, per_gid in counts_by_gid.items():
+        w = 1 if seed_weights is None else seed_weights.get(seed, 0)
+        if not w:
+            continue
+        labels = label_by_seed[seed]
+        for gid, d in per_gid.items():
+            t = labels.get(gid)
+            if t is None:
+                continue
+            for k, (n, nr) in d.items():
+                c = tot.get((t, k))
+                if c is None:
+                    tot[(t, k)] = [w * n, w * nr]
+                else:
+                    c[0] += w * n
+                    c[1] += w * nr
+    return {k: (v[0], v[1]) for k, v in tot.items()}
+
+
 # ------------------------------------------------------------------ per-age worker
 
 def age_cache_path(cache_dir: Path, age: int) -> Path:
@@ -345,13 +407,15 @@ def process_one_age(
             return {s: merge_type_membership(a[s], b[s]) for s in a}
         return type_pools_for_labels(label_by_seed, type_name)
 
+    # True-label pools never change within an age; build them once.
+    true_pools = {t: ha_type_pools(true_type_by_seed, t) for t in HA_TYPES}
     rng_main = random.Random(f"{master_seed}_main_{age}")
     vocabs = {opp: load_vocab(VOCAB_NAME[opp]) for opp in HUMAN_OPPONENTS}
 
     # --- H-A point estimate: n_draws_main cross-lineage draws, this age ---
     ha_point_edges: Dict[str, Dict[str, Dict[Tuple[str, str], float]]] = {}
     for type_name in HA_TYPES:
-        pools = ha_type_pools(true_type_by_seed, type_name)
+        pools = true_pools[type_name]
         gs = ha_group_size[type_name]
         draws = [draw_cross_lineage_identities(pools, gs, rng_main) for _ in range(n_draws_main)]
         ha_point_edges[type_name] = {
@@ -359,30 +423,19 @@ def process_one_age(
         }
 
     # --- H-B/H-C point estimate: direct pooling, no draws ---
+    counts_by_gid = recovery_counts_by_gid(recovery_by_seed, depth_by_seed)
     hb_point: Dict[Tuple[str, str], Tuple[int, int]] = {}
     hc_point: Dict[Tuple[str, str, str], Tuple[int, int]] = {}
-    all_recovery = [(seed, row) for seed, rows in recovery_by_seed.items() for row in rows]
+    tot_true = recovery_counts_by_label(counts_by_gid, true_type_by_seed)
     for type_name in ("K_Secure", "K_Fearful"):
         for opponent in ("SELF", "POP"):
-            n = n_rec = 0
-            for seed, (gid, opp_name, _repeat, rr) in all_recovery:
-                if opp_name != opponent or true_type_by_seed[seed].get(gid) != type_name:
-                    continue
-                n += 1
-                n_rec += rr is not None
-            if n:
-                hb_point[(type_name, opponent)] = (n, n_rec)
+            c = tot_true.get((type_name, ("opp", opponent)))
+            if c and c[0]:
+                hb_point[(type_name, opponent)] = c
         for stratum in HC_STRATA:
-            n = n_rec = 0
-            for seed, (gid, opp_name, _repeat, rr) in all_recovery:
-                if opp_name != "SELF" or true_type_by_seed[seed].get(gid) != type_name:
-                    continue
-                if depth_stratum(depth_by_seed[seed][gid]) != stratum:
-                    continue
-                n += 1
-                n_rec += rr is not None
-            if n:
-                hc_point[(type_name, stratum)] = (n, n_rec)
+            c = tot_true.get((type_name, ("stratum", stratum)))
+            if c and c[0]:
+                hc_point[(type_name, stratum)] = c
 
     # --- seed-level bootstrap (section 5-2) ---
     # Per-iteration values, keyed by iteration index i -- NOT flattened
@@ -408,7 +461,7 @@ def process_one_age(
 
         r_by_type_group: Dict[Tuple[str, str], float] = {}
         for type_name in HA_TYPES:
-            pools = ha_type_pools(true_type_by_seed, type_name)
+            pools = true_pools[type_name]
             gs = ha_group_size[type_name]
             if gs > len(resampled):
                 continue
@@ -426,35 +479,18 @@ def process_one_age(
         resampled_counts = defaultdict(int)
         for s in resampled:
             resampled_counts[s] += 1
+        tot_boot = recovery_counts_by_label(counts_by_gid, true_type_by_seed, resampled_counts)
         rate_by_type_opp: Dict[Tuple[str, str], float] = {}
         rate_by_type_stratum: Dict[Tuple[str, str], float] = {}
         for type_name in ("K_Secure", "K_Fearful"):
             for opponent in ("SELF", "POP"):
-                n = n_rec = 0
-                for seed, (gid, opp_name, _repeat, rr) in all_recovery:
-                    if opp_name != opponent or true_type_by_seed[seed].get(gid) != type_name:
-                        continue
-                    w = resampled_counts.get(seed, 0)
-                    if not w:
-                        continue
-                    n += w
-                    n_rec += w * (rr is not None)
-                if n:
-                    rate_by_type_opp[(type_name, opponent)] = n_rec / n
+                c = tot_boot.get((type_name, ("opp", opponent)))
+                if c and c[0]:
+                    rate_by_type_opp[(type_name, opponent)] = c[1] / c[0]
             for stratum in HC_STRATA:
-                n = n_rec = 0
-                for seed, (gid, opp_name, _repeat, rr) in all_recovery:
-                    if opp_name != "SELF" or true_type_by_seed[seed].get(gid) != type_name:
-                        continue
-                    if depth_stratum(depth_by_seed[seed][gid]) != stratum:
-                        continue
-                    w = resampled_counts.get(seed, 0)
-                    if not w:
-                        continue
-                    n += w
-                    n_rec += w * (rr is not None)
-                if n:
-                    rate_by_type_stratum[(type_name, stratum)] = n_rec / n
+                c = tot_boot.get((type_name, ("stratum", stratum)))
+                if c and c[0]:
+                    rate_by_type_stratum[(type_name, stratum)] = c[1] / c[0]
         for hyp, label, opponent in HB_COMPARISONS:
             if ("K_Fearful", opponent) in rate_by_type_opp and ("K_Secure", opponent) in rate_by_type_opp:
                 hb_seedboot_diffs[label][i] = hb_comparison_diff(rate_by_type_opp, opponent)
@@ -481,7 +517,7 @@ def process_one_age(
     rng_true_ha = random.Random(f"{master_seed}_true_ha_{age}")
     r_true: Dict[Tuple[str, str], float] = {}
     for type_name in HA_TYPES:
-        pools = ha_type_pools(true_type_by_seed, type_name)
+        pools = true_pools[type_name]
         gs = ha_group_size[type_name]
         draws = [draw_cross_lineage_identities(pools, gs, rng_true_ha) for _ in range(permutation_draws_ha)]
         edges_by_opp = {opp: average_edges(draws, series_by_seed_opponent, opp, vocabs[opp], rng_true_ha) for opp in HUMAN_OPPONENTS}
@@ -525,29 +561,18 @@ def process_one_age(
             if (type_, g_same) in r_perm and (type_, g_other) in r_perm:
                 ha_perm_null[label][i] = ha_comparison_diff(r_perm, type_, g_same, g_other)
 
+        tot_perm = recovery_counts_by_label(counts_by_gid, permuted_label_by_seed)
         rate_by_type_opp = {}
         rate_by_type_stratum = {}
         for type_name in ("K_Secure", "K_Fearful"):
             for opponent in ("SELF", "POP"):
-                n = n_rec = 0
-                for seed, (gid, opp_name, _repeat, rr) in all_recovery:
-                    if opp_name != opponent or permuted_label_by_seed[seed].get(gid) != type_name:
-                        continue
-                    n += 1
-                    n_rec += rr is not None
-                if n:
-                    rate_by_type_opp[(type_name, opponent)] = n_rec / n
+                c = tot_perm.get((type_name, ("opp", opponent)))
+                if c and c[0]:
+                    rate_by_type_opp[(type_name, opponent)] = c[1] / c[0]
             for stratum in HC_STRATA:
-                n = n_rec = 0
-                for seed, (gid, opp_name, _repeat, rr) in all_recovery:
-                    if opp_name != "SELF" or permuted_label_by_seed[seed].get(gid) != type_name:
-                        continue
-                    if depth_stratum(depth_by_seed[seed][gid]) != stratum:
-                        continue
-                    n += 1
-                    n_rec += rr is not None
-                if n:
-                    rate_by_type_stratum[(type_name, stratum)] = n_rec / n
+                c = tot_perm.get((type_name, ("stratum", stratum)))
+                if c and c[0]:
+                    rate_by_type_stratum[(type_name, stratum)] = c[1] / c[0]
         for hyp, label, opponent in HB_COMPARISONS:
             if ("K_Fearful", opponent) in rate_by_type_opp and ("K_Secure", opponent) in rate_by_type_opp:
                 hb_perm_null[label][i] = hb_comparison_diff(rate_by_type_opp, opponent)
