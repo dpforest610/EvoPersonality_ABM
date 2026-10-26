@@ -48,6 +48,8 @@ Usage (see docs/K_MODEL_MARKOV_MAC_RUNBOOK.md for the full Mac command):
 """
 
 import argparse
+import csv
+import gzip
 import importlib.util
 import json
 import pickle
@@ -55,6 +57,7 @@ import random
 import statistics
 import sys
 import time
+import traceback
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
@@ -81,7 +84,7 @@ from evopersonality_abm.k_model_confirmatory import (  # noqa: E402
 )
 from evopersonality_abm.lindgren import LindgrenTable, effective_memory_depth  # noqa: E402
 from evopersonality_abm.markov_apply import load_human_weights  # noqa: E402
-from evopersonality_abm.markov_recovery import build_edges, load_vocab, self_loop_edges  # noqa: E402
+from evopersonality_abm.markov_recovery import build_edges, load_vocab, self_loop_edges, series_from_moves  # noqa: E402
 
 # Imported the same way scripts/export_k_model_markov_viewer.py imports
 # scripts/run_coupling_markov_pilot.py -- a script, not a package module.
@@ -99,6 +102,36 @@ VOCAB_NAME = {"TFT": "TFT", "Random": "RAN", "AllC": "AllC", "AllD": "AllD", "Gr
 
 # ------------------------------------------------------------------ loading + pool construction
 
+def load_series_first_rounds(moves_path: Path, main_analysis_rounds: int = 20) -> Dict[str, Dict[int, List[str]]]:
+    """Same output as viewer_mod.load_series_by_genotype_all_opponents, but
+    rows past round `main_analysis_rounds` are skipped before any parsing:
+    series_from_moves only ever reads the first `main_analysis_rounds`
+    moves, and the moves file stores 100 rounds per duel, so ~80% of the
+    rows were parsed for nothing (tests check the outputs are equal)."""
+    own: Dict[Tuple[str, int, int], Dict[int, str]] = defaultdict(dict)
+    opp: Dict[Tuple[str, int, int], Dict[int, str]] = defaultdict(dict)
+    with gzip.open(moves_path, "rt", newline="") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        i_gid, i_opp, i_rep, i_rnd = (header.index(c) for c in ("genotype_id", "opponent", "repeat", "round"))
+        i_own, i_om = header.index("own_move"), header.index("opp_move")
+        for row in reader:
+            rnd = int(row[i_rnd])
+            if rnd > main_analysis_rounds:
+                continue
+            key = (row[i_opp], int(row[i_gid]), int(row[i_rep]))
+            own[key][rnd] = row[i_own]
+            opp[key][rnd] = row[i_om]
+    result: Dict[str, Dict[int, List[str]]] = defaultdict(lambda: defaultdict(list))
+    for (opponent, gid, repeat), own_by_round in own.items():
+        max_round = max(own_by_round)
+        own_moves = [own_by_round[i] for i in range(1, max_round + 1)]
+        opp_moves = [opp[(opponent, gid, repeat)][i] for i in range(1, max_round + 1)]
+        series = series_from_moves(own_moves, opp_moves, n_rounds=main_analysis_rounds)
+        result[opponent][gid].append(series)
+    return {k: dict(v) for k, v in result.items()}
+
+
 def load_one_seed_age(data_dir: Path, seed: int, age: int):
     """(census_with_k, series_by_opponent, recovery_rows) for one (seed,
     age), or None if any of the 3 files is missing."""
@@ -108,7 +141,7 @@ def load_one_seed_age(data_dir: Path, seed: int, age: int):
     if not (cpath.exists() and mpath.exists() and rpath.exists()):
         return None
     census = viewer_mod.load_census_with_k(cpath)
-    series_by_opponent = viewer_mod.load_series_by_genotype_all_opponents(mpath)
+    series_by_opponent = load_series_first_rounds(mpath)
     recovery = viewer_mod.load_recovery(rpath)
     return census, series_by_opponent, recovery
 
@@ -179,6 +212,17 @@ def draw_cross_lineage_identities(type_pools: Dict[int, Tuple[Dict[int, int], Di
         g = rng.choices(gids, weights=weights, k=1)[0]
         result.append((s, g))
     return result
+
+
+def seeds_with_type(type_pools) -> List[int]:
+    return [s for s in type_pools if type_pools[s][0]]
+
+
+def effective_group_size(target: int, n_available: int) -> int:
+    """docs/DEVIATION_k_model_group_size.md: when fewer lineages carry a
+    type than the human group size, the cross-lineage group uses every
+    available lineage (one individual each) instead of failing."""
+    return min(target, n_available)
 
 
 def draw_cross_lineage_identities_from_resampled_seeds(
@@ -414,10 +458,12 @@ def process_one_age(
 
     # --- H-A point estimate: n_draws_main cross-lineage draws, this age ---
     ha_point_edges: Dict[str, Dict[str, Dict[Tuple[str, str], float]]] = {}
+    effective_gs: Dict[str, int] = {}
     for type_name in HA_TYPES:
         pools = true_pools[type_name]
-        gs = ha_group_size[type_name]
-        draws = [draw_cross_lineage_identities(pools, gs, rng_main) for _ in range(n_draws_main)]
+        gs = effective_group_size(ha_group_size[type_name], len(seeds_with_type(pools)))
+        effective_gs[type_name] = gs
+        draws = [draw_cross_lineage_identities(pools, gs, rng_main) for _ in range(n_draws_main)] if gs else []
         ha_point_edges[type_name] = {
             opp: average_edges(draws, series_by_seed_opponent, opp, vocabs[opp], rng_main) for opp in HUMAN_OPPONENTS
         }
@@ -462,10 +508,14 @@ def process_one_age(
         r_by_type_group: Dict[Tuple[str, str], float] = {}
         for type_name in HA_TYPES:
             pools = true_pools[type_name]
-            gs = ha_group_size[type_name]
-            if gs > len(resampled):
+            # Only resampled positions whose lineage carries this type can
+            # contribute an individual (a position without one would make
+            # rng.choices fail on an empty pool).
+            resampled_with_type = [s for s in resampled if pools[s][0]]
+            gs = effective_group_size(ha_group_size[type_name], len(resampled_with_type))
+            if not gs:
                 continue
-            identities = draw_cross_lineage_identities_from_resampled_seeds(pools, resampled, gs, rng)
+            identities = draw_cross_lineage_identities_from_resampled_seeds(pools, resampled_with_type, gs, rng)
             edges_by_opp = {opp: build_edges_for_series(lookup_series(identities, series_by_seed_opponent, opp, rng), vocabs[opp]) for opp in HUMAN_OPPONENTS}
             type_vector = concatenate_edges(edges_by_opp)
             for group in ("Secure", "Mix", "Fearful"):
@@ -518,7 +568,9 @@ def process_one_age(
     r_true: Dict[Tuple[str, str], float] = {}
     for type_name in HA_TYPES:
         pools = true_pools[type_name]
-        gs = ha_group_size[type_name]
+        gs = effective_gs[type_name]
+        if not gs:
+            continue
         draws = [draw_cross_lineage_identities(pools, gs, rng_true_ha) for _ in range(permutation_draws_ha)]
         edges_by_opp = {opp: average_edges(draws, series_by_seed_opponent, opp, vocabs[opp], rng_true_ha) for opp in HUMAN_OPPONENTS}
         type_vector = concatenate_edges(edges_by_opp)
@@ -547,8 +599,11 @@ def process_one_age(
         r_perm: Dict[Tuple[str, str], float] = {}
         for type_name in HA_TYPES:
             pools = ha_type_pools(permuted_label_by_seed, type_name)
-            gs = ha_group_size[type_name]
-            if gs > len([s for s in pools if pools[s][0]]):
+            # Labels are permuted within each (seed, age), so the lineages
+            # carrying a type -- and hence the effective group size -- are
+            # the same as for the true labels.
+            gs = effective_group_size(ha_group_size[type_name], len(seeds_with_type(pools)))
+            if not gs:
                 continue
             draws = [draw_cross_lineage_identities(pools, gs, rng) for _ in range(permutation_draws_ha)]
             edges_by_opp = {opp: average_edges(draws, series_by_seed_opponent, opp, vocabs[opp], rng) for opp in HUMAN_OPPONENTS}
@@ -583,6 +638,7 @@ def process_one_age(
     return {
         "age": age,
         "ha_point_edges": ha_point_edges,
+        "ha_effective_group_size": effective_gs,
         "hb_point": hb_point,
         "hc_point": hc_point,
         "ha_seedboot_diffs": dict(ha_seedboot_diffs),
@@ -630,12 +686,24 @@ def run_all_ages(
             ): age
             for age in pending
         }
+        failed = []
         for fut in as_completed(futures):
             age = futures[fut]
-            result = fut.result()
+            # One failing age must not discard the others: log it, keep
+            # going, and let every finished age reach the cache.
+            try:
+                result = fut.result()
+            except Exception:
+                failed.append(age)
+                print(f"age={age} FAILED, elapsed={time.time() - t0:.0f}s", flush=True)
+                traceback.print_exc()
+                sys.stdout.flush()
+                continue
             with open(age_cache_path(cache_dir, age), "wb") as f:
                 pickle.dump(result, f)
             print(f"age={age} done, elapsed={time.time() - t0:.0f}s", flush=True)
+    if failed:
+        raise SystemExit(f"{len(failed)} age(s) failed: {sorted(failed)} -- cached ages are kept; fix and rerun the same command to resume.")
 
     results = []
     for age in ages:

@@ -218,3 +218,38 @@ def test_recovery_counts_by_label_matches_naive_row_scan():
                             n += ww
                             nr += ww * (rr is not None)
                 assert got.get((t, ("stratum", stratum)), (0, 0)) == (n, nr)
+
+
+def test_load_series_first_rounds_matches_full_loader(tmp_path):
+    data_dir = make_tiny_production_data(tmp_path, n_seeds=2, n_genomes=6, age=1000)
+    for seed in range(2):
+        path = pilot_mod.moves_path(data_dir, seed, 1000)
+        # probe_rounds=10 in the tiny data: also check a cut below the duel length
+        for n in (20, 5):
+            assert mod.load_series_first_rounds(path, n) == mod.viewer_mod.load_series_by_genotype_all_opponents(path, n)
+
+
+def test_process_one_age_uses_available_lineages_when_a_type_is_scarce(tmp_path):
+    # docs/DEVIATION_k_model_group_size.md: a group size larger than the
+    # number of lineages carrying the type must shrink to that number
+    # (point estimate, seed bootstrap and permutations alike) instead of
+    # raising, and bootstrap positions without the type must be skipped.
+    n_seeds = 6
+    age = 1000
+    data_dir = make_tiny_production_data(tmp_path, n_seeds=n_seeds, n_genomes=3, age=age)
+    thresholds = median_thresholds(data_dir, n_seeds, age)
+    seeds = list(range(n_seeds))
+    big = {"K_Secure": 50, "Mix": 50, "K_Fearful": 50}
+    result = mod.process_one_age(
+        str(data_dir), age, seeds, thresholds["threshold_kout"], thresholds["threshold_kself"],
+        str(REPO_ROOT / "docs" / "human_network_weights.csv"),
+        n_draws_main=3, seedboot_resamples=mod.build_seedboot_resamples(seeds, 20, "t"),
+        n_permutations=5, permutation_draws_ha=2, master_seed="t", ha_group_size=big,
+    )
+    census = {s: mod.viewer_mod.load_census_with_k(pilot_mod.census_path(data_dir, s, age)) for s in seeds}
+    for type_name, gs in result["ha_effective_group_size"].items():
+        labels = {s: mod.census_true_types(c, thresholds["threshold_kout"], thresholds["threshold_kself"]) for s, c in census.items()}
+        members = {"Mix": {"K_Dismissing", "K_Preoccupied"}}.get(type_name, {type_name})
+        n_lineages = sum(1 for s in seeds if any(t in members for t in labels[s].values()))
+        assert gs == min(50, n_lineages)
+    assert any(gs < n_seeds for gs in result["ha_effective_group_size"].values())
