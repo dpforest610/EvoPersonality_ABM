@@ -161,3 +161,21 @@ def test_main_writes_summary_file(tmp_path):
     with open(out_path) as f:
         summary = json.load(f)
     assert set(summary.keys()) == {"ha", "hb", "hc"}
+
+
+def test_gid_effective_depth_handles_memory_depth_zero():
+    # Regression: a memory-depth-0 genotype has an empty prehistory, written
+    # to census.csv.gz as "" -- this crashed the production run with
+    # ValueError: invalid literal for int() with base 10: ''.
+    from evopersonality_abm.lindgren import LindgrenTable
+    t0 = LindgrenTable(0, [1], [])
+    t2 = LindgrenTable(1, [0, 1, 1, 0], [1, 0])
+    census = []
+    for gid, t in ((1, t0), (2, t2)):
+        census.append((gid, 1, t.memory_depth, ",".join(map(str, t.table)), ",".join(map(str, t.prehistory)), 0.5, 0.5))
+    assert census[0][4] == ""
+    depths = mod.gid_effective_depth(census)
+    assert set(depths) == {1, 2}
+    assert depths[1] == mod.effective_memory_depth(t0)
+    assert mod._parse_bits("") == []
+    assert mod._parse_bits("1,0,1") == [1, 0, 1]

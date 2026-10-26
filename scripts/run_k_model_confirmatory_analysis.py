@@ -286,10 +286,16 @@ def pool_never_recovered_rate(recovery_rows, gid_to_type: Dict[int, str], type_n
     return (n, n_recovered) if n else None
 
 
+def _parse_bits(s: str) -> List[int]:
+    """Parse a census bit string ("0,1,1"). Memory-depth-0 genotypes have an
+    empty prehistory, written as "" -- which must parse to [], not fail."""
+    return [int(x) for x in s.split(",") if x.strip() != ""]
+
+
 def gid_effective_depth(census) -> Dict[int, int]:
     out = {}
     for gid, _f, md, t, p, _k_out, _k_self in census:
-        table = LindgrenTable(md, [int(x) for x in t.split(",")], [int(x) for x in p.split(",")])
+        table = LindgrenTable(md, _parse_bits(t), _parse_bits(p))
         out[gid] = effective_memory_depth(table)
     return out
 
