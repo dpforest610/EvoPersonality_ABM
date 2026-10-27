@@ -409,3 +409,116 @@ git add scripts/output/figures/k_model_recovery_rate_by_depth_stratum_SELF.png
 git commit -m "K-model production: conference figures (H-B by generation, H-C by depth stratum)"
 git push
 ```
+
+---
+
+## 11. ビューア用データの書き出し(事前登録外、探索的——Lindgren側のビューアと同じ形式)
+
+`scripts/export_k_model_markov_viewer.py`を本番用に直した(`scripts/
+run_k_model_confirmatory_analysis.py`のH-Aと同じ系統間抽出+
+`docs/DEVIATION_k_model_group_size.md`の人数規則、全8相手、K-安定型・
+K-拒絶型・K-とらわれ型・K-恐れ型・合成Mixの5群)。8節の確証的分析とは
+別物(置換検定もブートストラップも行わない、純粋に辺の重み・ノードの
+出現率を集計するだけ)なので、8節の完了を待たずに並行して実行してよい。
+
+### 11-1. 小規模の実測
+
+```bash
+time venv/bin/python scripts/export_k_model_markov_viewer.py \
+  --data-dir scripts/output/coupling_markov_production --seeds 70 --seed-offset 200 \
+  --thresholds-json scripts/output/coupling_markov_production/analysis/type_thresholds.json \
+  --window-start 1000 --window-end 1100 --n-draws 200 --workers 5 \
+  --out-dir /tmp/k_model_viewer_timing_check
+```
+
+(gen 1000・1050・1100の3時点だけ処理する。表示された`real`秒数を3で割り、
+81時点分に単純に伸ばした値を本番の見積もりとする——クラウド環境での
+ごく小規模なベンチマークからの外挿では、1時点あたり数十秒程度
+[`--workers 5`で並列化すれば81時点全体で10〜20分程度]と見込まれるが、
+実測ではないので必ずこの手順で更新すること。)
+
+終わったら削除してよい: `rm -rf /tmp/k_model_viewer_timing_check`。
+
+### 11-2. 本番実行
+
+```bash
+mkdir -p logs
+nohup caffeinate -dimsu venv/bin/python scripts/export_k_model_markov_viewer.py \
+  --data-dir scripts/output/coupling_markov_production --seeds 70 --seed-offset 200 \
+  --thresholds-json scripts/output/coupling_markov_production/analysis/type_thresholds.json \
+  --window-start 1000 --window-end 5000 --n-draws 200 --workers 5 \
+  --out-dir scripts/output/coupling_markov_production/viewer \
+  > logs/k_model_viewer_export.log 2>&1 &
+disown
+```
+
+### 11-3. 進捗・再開
+
+時点(age)ごとに`<out-dir>/_age_cache/age_<N>.pkl`へ結果をキャッシュする
+(`.gitignore`の`scripts/output/**/_age_cache/`パターンで、この
+`viewer/_age_cache/`も既に対象)。`pkill`や停電で止まっても、**同じコマンドを
+もう一度打てば**キャッシュ済みの時点をスキップして再開する。
+
+```bash
+ps aux | grep export_k_model_markov_viewer | grep -v grep
+tail -40 logs/k_model_viewer_export.log
+ls scripts/output/coupling_markov_production/viewer/_age_cache/ | wc -l   # 完了済み時点数(81で全完了)
+```
+
+### 11-4. 結果の確認・push
+
+完了すると次が書かれる:`k_model_type_counts.csv`・`k_model_widest_path.csv`・
+`k_model_recovery_time.csv`・`k_model_effective_group_size.csv`(型ごと・
+時点ごとに実際使った人数——合成Mix・K-拒絶型・K-とらわれ型も含め、
+`docs/DEVIATION_k_model_group_size.md`と同じ規則)・`k_model_edges.json`・
+`k_model_nodes.json`。いずれも集計済みの軽量ファイルなのでリポジトリに
+入れる(`_age_cache/`は除く):
+
+```bash
+git add scripts/output/coupling_markov_production/viewer/k_model_type_counts.csv
+git add scripts/output/coupling_markov_production/viewer/k_model_widest_path.csv
+git add scripts/output/coupling_markov_production/viewer/k_model_recovery_time.csv
+git add scripts/output/coupling_markov_production/viewer/k_model_effective_group_size.csv
+git add scripts/output/coupling_markov_production/viewer/k_model_edges.json
+git add scripts/output/coupling_markov_production/viewer/k_model_nodes.json
+git commit -m "K-model production: viewer export (edges/nodes, all 8 opponents x 5 groupings x 81 ages)"
+git push
+```
+
+---
+
+## 12. ビューアを開く(`k_model_network_viewer.html`)
+
+`scripts/output/figures/k_model_network_viewer.html`は、`k_model_edges.json`・
+`k_model_nodes.json`と同じフォルダから`fetch()`で読むので、`file://`で直接
+開くとブラウザのセキュリティ制限で読み込めない。簡易サーバー経由で開く。
+
+```bash
+cp scripts/output/figures/k_model_network_viewer.html \
+   scripts/output/coupling_markov_production/viewer/index.html
+cd scripts/output/coupling_markov_production/viewer
+python3 -m http.server 8000
+```
+
+ブラウザで `http://localhost:8000/index.html` を開く。見終わったら
+`Ctrl+C`でサーバーを止めてよい(`index.html`は`.gitignore`済みの`viewer/`内
+コピーなのでpushされない——オリジナルは`scripts/output/figures/
+k_model_network_viewer.html`のまま)。
+
+操作:
+- **相手**:TFT・GRA(Gradual)・RAN(Random)・ALC(AllC)・ALD(AllD)・WSLS・
+  SELF(仲間)・POP(同じ集団)の8つ。後の3つは人のデータが無いため、人の
+  3群のパネルは空になる(想定どおり)。
+- **Kモデルの群**:K-安定型・K-拒絶型・K-とらわれ型・K-恐れ型・合成Mixの
+  5つ(右上のパネルだけが切り替わる。人の3群のパネルは常にSecure/Mix/
+  Fearful)。
+- **Jaccard閾値**・**世代**の2つのスライダー(「再生」ボタンで自動再生)。
+- ノードの大きさ=出現率(Kモデルのパネルのみ——人のパネルは出現率の
+  データが無いため固定サイズ)。ノードの位置は64語彙全体の共通格子で
+  固定(相手を切り替えても動かない)。
+- 固着回路(Table 7)は、現在の閾値ですべての辺が揃っているときだけ
+  色が付く。WSLS/SELF/POPには固着回路の定義が無いため、常に無色。
+
+図には「中央値で無理やり分けた型であり、集団は連続した一つの雲」の
+注記が常に表示されている。**探索的・事前登録外の可視化であり、
+確証的結果(`docs/K_MODEL_MARKOV_RESULTS.md`)の判定根拠ではない。**

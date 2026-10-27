@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kモデル Markov網 ビューア</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1b1f23; --panel-bg: #fafbfc; --border: #d0d7de;
+    --accent: #0969da; --muted: #57606a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0d1117; --fg: #e6edf3; --panel-bg: #161b22; --border: #30363d;
+      --accent: #58a6ff; --muted: #8b949e;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d1117; --fg: #e6edf3; --panel-bg: #161b22; --border: #30363d;
+    --accent: #58a6ff; --muted: #8b949e;
+  }
+  body { background: var(--bg); color: var(--fg); font-family: "IPAGothic", "Hiragino Sans", "Yu Gothic", sans-serif; margin: 16px; }
+  h1 { font-size: 18px; margin: 0 0 12px; }
+  #status { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+  #caveat { color: var(--muted); font-size: 12px; margin-bottom: 10px; padding: 6px 10px; border: 1px dashed var(--border); border-radius: 6px; display: inline-block; }
+  #controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; padding: 10px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 14px; }
+  #controls label { font-size: 13px; display: flex; align-items: center; gap: 6px; }
+  #controls input[type=range] { width: 220px; }
+  button.play { border: 1px solid var(--border); background: var(--panel-bg); color: var(--fg); border-radius: 6px; padding: 2px 10px; cursor: pointer; font-size: 13px; }
+  button.play:hover { border-color: var(--accent); }
+  #panels { display: flex; gap: 12px; flex-wrap: wrap; }
+  .panel { flex: 1 1 260px; min-width: 260px; border: 1px solid var(--border); border-radius: 8px; padding: 8px; background: var(--panel-bg); }
+  .panel h3 { margin: 0 0 4px; font-size: 14px; text-align: center; }
+  .panel svg { width: 100%; height: auto; background: var(--bg); border-radius: 4px; }
+  .circuitList { margin-top: 6px; font-size: 11px; }
+  .circuitEntry { display: flex; align-items: center; gap: 4px; margin: 2px 0; }
+  .swatch { width: 10px; height: 10px; display: inline-block; border-radius: 2px; }
+  #legend { margin-top: 14px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--border); padding-top: 8px; line-height: 1.6; }
+  .nodeLabel { font-family: "IPAGothic", "Hiragino Sans", "Yu Gothic", sans-serif; fill: var(--fg); }
+</style>
+</head>
+<body>
+<h1>Kモデル マルコフ網ビューア: Jaccard閾値 × 世代(探索的・事前登録外)</h1>
+<div id="status">データを読み込み中...</div>
+<div id="caveat">中央値で無理やり分けた型であり、集団は連続した一つの雲</div>
+
+<div id="controls">
+  <label>相手:
+    <select id="opponentSelect">
+      <option value="TFT">TFT</option>
+      <option value="GRA">GRA (Gradual)</option>
+      <option value="RAN">RAN (Random)</option>
+      <option value="ALC">ALC (AllC)</option>
+      <option value="ALD">ALD (AllD)</option>
+      <option value="WSLS">WSLS</option>
+      <option value="SELF">SELF(仲間)</option>
+      <option value="POP">POP(同じ集団)</option>
+    </select>
+  </label>
+  <label>Kモデルの群:
+    <select id="groupingSelect">
+      <option value="K_Secure">K-安定型</option>
+      <option value="K_Dismissing">K-拒絶型</option>
+      <option value="K_Preoccupied">K-とらわれ型</option>
+      <option value="K_Fearful">K-恐れ型</option>
+      <option value="Mix">合成Mix</option>
+    </select>
+  </label>
+  <label>Jaccard閾値: <span id="thresholdLabel">0.30</span>
+    <input type="range" id="thresholdSlider" min="1" max="80" step="1" value="30">
+    <button class="play" id="thresholdPlay">再生</button>
+  </label>
+  <label>世代(Kモデルのみ): <span id="genLabel">-</span>
+    <input type="range" id="genSlider" min="0" max="0" step="1" value="0">
+    <button class="play" id="genPlay">再生</button>
+  </label>
+</div>
+
+<div id="panels">
+  <div class="panel"><h3>人 Secure</h3><svg id="svg-Secure" viewBox="0 0 480 480"></svg><div class="circuitList" id="info-Secure"></div></div>
+  <div class="panel"><h3>人 Mix</h3><svg id="svg-Mix" viewBox="0 0 480 480"></svg><div class="circuitList" id="info-Mix"></div></div>
+  <div class="panel"><h3>人 Fearful</h3><svg id="svg-Fearful" viewBox="0 0 480 480"></svg><div class="circuitList" id="info-Fearful"></div></div>
+  <div class="panel"><h3 id="abmTitle">Kモデル</h3><svg id="svg-ABM" viewBox="0 0 480 480"></svg><div class="circuitList" id="info-ABM"></div></div>
+</div>
+
+<div id="legend">
+  <b>凡例</b> — ノード名は人の論文と同じ3文字の漢字(直近3ラウンドの相互作用): 和=R(Reward, 相互協力) / 惨=S(Sucker, 自分C・相手D) / 搾=T(Temptation, 自分D・相手C) / 底=P(Punishment, 相互裏切り)。
+  辺は閾値以上のJaccardのみ描画、太さはJaccardに比例、矢印は遷移の向き。自己ループは3文字が全て同じノード(例: 和和和・底底底)のみ構造的に発生しうる。
+  ノードの大きさは、その語が描かれた群の中に現れた割合(出現率)に比例する(人の3群は出現率のデータがないため固定サイズ)。
+  ノードの位置は、64語彙の全体をアルファベット順に並べた共通の格子で固定している(相手を切り替えてもノードの位置は動かない)。
+  オレンジ枠のノード(底底底・和和和)は事前登録の分析対象。色付きの太い辺はTable 7の固着回路(そのすべての辺が現在の閾値以上のときだけ色が付く — 「閉じている」)。
+  出典: scripts/export_k_model_markov_viewer.py(Kモデル、系統間抽出200回の平均Jaccard、docs/DEVIATION_k_model_group_size.mdの人数規則)・docs/human_network_weights.csv(人、N=171)。
+  探索的・事前登録外の可視化であり、確証的結果(docs/K_MODEL_MARKOV_RESULTS.md)の判定根拠ではない。
+</div>
+
+<script>
+const VOCAB = {"TFT": ["和和和", "和和搾", "和搾底", "和搾惨", "底底底", "底底惨", "底惨和", "底惨搾", "惨和和", "惨和搾", "惨搾底", "惨搾惨", "搾底底", "搾底惨", "搾惨和", "搾惨搾"], "GRA": ["和和和", "和和底", "和和惨", "和和搾", "和底和", "和底底", "和底惨", "和底搾", "和惨和", "和惨底", "和惨惨", "和惨搾", "和搾和", "和搾底", "和搾惨", "和搾搾", "底和和", "底和底", "底和惨", "底和搾", "底底和", "底底底", "底底惨", "底底搾", "底惨和", "底惨底", "底惨惨", "底惨搾", "底搾和", "底搾底", "底搾惨", "底搾搾", "惨和和", "惨和底", "惨和惨", "惨和搾", "惨底和", "惨底底", "惨底惨", "惨底搾", "惨惨和", "惨惨底", "惨惨惨", "惨惨搾", "惨搾和", "惨搾底", "惨搾惨", "惨搾搾", "搾和和", "搾和底", "搾和惨", "搾和搾", "搾底和", "搾底底", "搾底惨", "搾底搾", "搾惨和", "搾惨底", "搾惨惨", "搾惨搾", "搾搾和", "搾搾底", "搾搾惨", "搾搾搾"], "RAN": ["和和和", "和和底", "和和惨", "和和搾", "和底和", "和底底", "和底惨", "和底搾", "和惨和", "和惨底", "和惨惨", "和惨搾", "和搾和", "和搾底", "和搾惨", "和搾搾", "底和和", "底和底", "底和惨", "底和搾", "底底和", "底底底", "底底惨", "底底搾", "底惨和", "底惨底", "底惨惨", "底惨搾", "底搾和", "底搾底", "底搾惨", "底搾搾", "惨和和", "惨和底", "惨和惨", "惨和搾", "惨底和", "惨底底", "惨底惨", "惨底搾", "惨惨和", "惨惨底", "惨惨惨", "惨惨搾", "惨搾和", "惨搾底", "惨搾惨", "惨搾搾", "搾和和", "搾和底", "搾和惨", "搾和搾", "搾底和", "搾底底", "搾底惨", "搾底搾", "搾惨和", "搾惨底", "搾惨惨", "搾惨搾", "搾搾和", "搾搾底", "搾搾惨", "搾搾搾"], "AllC": ["和和和", "和和搾", "和搾和", "和搾搾", "搾和和", "搾和搾", "搾搾和", "搾搾搾"], "AllD": ["底底底", "底底惨", "底惨底", "底惨惨", "惨底底", "惨底惨", "惨惨底", "惨惨惨"]};
+const NAMED_CIRCUITS = {"TFT": [["和和和", "和和搾", "和搾惨", "搾惨和", "惨和和", "和和和"], ["搾惨搾", "惨搾惨", "搾惨搾"], ["底底底", "底底惨", "底惨搾", "惨搾底", "搾底底", "底底底"], ["底底底", "底底惨", "底惨和", "惨和搾", "和搾底", "搾底底", "底底底"]], "GRA": [["底底底", "底底惨", "底惨底", "惨底底", "底底底"], ["底底惨", "底惨底", "惨底底", "底底惨"], ["底惨底", "惨底惨", "底惨底"], ["和和和", "和和搾", "和搾惨", "搾惨和", "惨和和", "和和和"], ["底惨惨", "惨惨底", "惨底惨", "底惨惨"]], "AllC": [["和搾搾", "搾搾和", "搾和搾", "和搾搾"], ["和和搾", "和搾搾", "搾搾和", "搾和和", "和和搾"], ["和和和", "和和搾", "和搾和", "搾和和", "和和和"], ["和和和", "和和搾"]], "AllD": [["底惨惨", "惨惨底", "惨底惨", "底惨惨"], ["底底惨", "底惨底", "惨底底", "底底惨"], ["底底底", "底底惨", "底惨底", "惨底底", "底底底"], ["底底惨", "底惨惨", "惨惨底", "惨底底", "底底惨"], ["底底底", "底底惨", "底惨惨", "惨惨底", "惨底底", "底底底"], ["底惨惨", "惨惨惨", "惨惨底", "惨底惨", "底惨惨"], ["底惨惨", "惨惨惨", "惨惨底", "惨底底", "底底惨", "底惨惨"], ["底底底", "底底惨", "底惨惨", "惨惨惨", "惨惨底", "惨底底", "底底底"], ["底惨底", "惨底惨", "底惨底"]], "RAN": [["底惨底", "惨底惨", "底惨底"]]};
+
+const OPPONENTS = [
+  {ui: "TFT",  abmKey: "TFT",  humanKey: "TFT", circuitKey: "TFT",  vocabKey: "TFT"},
+  {ui: "GRA",  abmKey: "Gradual", humanKey: "GRA", circuitKey: "GRA",  vocabKey: "GRA"},
+  {ui: "RAN",  abmKey: "Random",  humanKey: "RAN", circuitKey: "RAN",  vocabKey: "RAN"},
+  {ui: "ALC",  abmKey: "AllC", humanKey: "ALC", circuitKey: "AllC", vocabKey: "AllC"},
+  {ui: "ALD",  abmKey: "AllD", humanKey: "ALD", circuitKey: "AllD", vocabKey: "AllD"},
+  {ui: "WSLS", abmKey: "WSLS", humanKey: null,  circuitKey: "WSLS(no-circuits)", vocabKey: "GRA"},
+  {ui: "SELF", abmKey: "SELF", humanKey: null,  circuitKey: "SELF(no-circuits)", vocabKey: "RAN"},
+  {ui: "POP",  abmKey: "POP",  humanKey: null,  circuitKey: "POP(no-circuits)",  vocabKey: "RAN"},
+];
+const HUMAN_GROUPS = ["Secure", "Mix", "Fearful"];
+const CIRCUIT_COLORS = ["#e6194b", "#3cb44b", "#4363d8", "#f58231", "#911eb4", "#469990", "#f032e6", "#9a6324"];
+const START_NODE = "底底底", GOAL_NODE = "和和和";
+const NS = "http://www.w3.org/2000/svg";
+
+// 64マスの共通配置(docs/K_MODEL_MARKOV_RESULTS.md 系の図と同じ注記のとおり、
+// 「切り分け」であってモデルの構造そのものではない -- ここでは単にノードの
+// 位置を相手によらず固定するための、全64語彙のアルファベット順グリッド)。
+const FULL_VOCAB_64 = [...new Set([...VOCAB.GRA, ...VOCAB.RAN])].sort();
+const COMMON_GRID_LAYOUT = (function () {
+  const sorted = FULL_VOCAB_64;
+  const n = sorted.length;
+  const cols = Math.ceil(Math.sqrt(n));
+  const rows = Math.ceil(n / cols);
+  const pos = {};
+  sorted.forEach((node, i) => {
+    const col = i % cols, row = Math.floor(i / cols);
+    pos[node] = [
+      cols > 1 ? (col / (cols - 1)) * 2 - 1 : 0,
+      rows > 1 ? (row / (rows - 1)) * 2 - 1 : 0,
+    ];
+  });
+  return pos;
+})();
+
+let DATA = null;
+let NODE_DATA = null;
+let state = { opponent: "TFT", grouping: "K_Secure", threshold: 0.30, genIndex: 0, availableAges: [] };
+let thresholdTimer = null, genTimer = null;
+
+async function loadData() {
+  const res = await fetch("k_model_edges.json");
+  if (!res.ok) throw new Error(`k_model_edges.json: HTTP ${res.status}`);
+  DATA = await res.json();
+  try {
+    const resNodes = await fetch("k_model_nodes.json");
+    if (resNodes.ok) NODE_DATA = await resNodes.json();
+  } catch (e) {
+    NODE_DATA = null; // node-size-by-rate just falls back to fixed size
+  }
+}
+
+function edgesToMap(rows) {
+  const m = new Map();
+  for (const [a, b, j] of (rows || [])) m.set(a + "->" + b, j);
+  return m;
+}
+
+function bfsReachable(edgeMap, threshold, start, goal) {
+  const adj = new Map();
+  for (const [key, j] of edgeMap) {
+    if (j < threshold) continue;
+    const [a, b] = key.split("->");
+    if (!adj.has(a)) adj.set(a, []);
+    adj.get(a).push(b);
+  }
+  if (!adj.has(start) && start !== goal) return false;
+  const seen = new Set([start]);
+  const stack = [start];
+  while (stack.length) {
+    const x = stack.pop();
+    if (x === goal) return true;
+    for (const y of (adj.get(x) || [])) {
+      if (!seen.has(y)) { seen.add(y); stack.push(y); }
+    }
+  }
+  return seen.has(goal);
+}
+
+function circuitJStar(circuit, edgeMap) {
+  let minJ = Infinity;
+  for (let i = 0; i < circuit.length - 1; i++) {
+    const j = edgeMap.get(circuit[i] + "->" + circuit[i + 1]) || 0;
+    minJ = Math.min(minJ, j);
+  }
+  return minJ === Infinity ? 0 : minJ;
+}
+
+function circuitClosed(circuit, edgeMap, threshold) {
+  for (let i = 0; i < circuit.length - 1; i++) {
+    const j = edgeMap.get(circuit[i] + "->" + circuit[i + 1]) || 0;
+    if (j < threshold) return false;
+  }
+  return true;
+}
+
+function renderPanel(svgId, infoId, opponentDef, edgeRows, nodeRates) {
+  const svgEl = document.getElementById(svgId);
+  const infoEl = document.getElementById(infoId);
+  while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
+
+  const nodes = VOCAB[opponentDef.vocabKey];
+  const pos = COMMON_GRID_LAYOUT;
+  const edgeMap = edgesToMap(edgeRows);
+  const threshold = state.threshold;
+  const W = 480, H = 480, PAD = 36;
+
+  const defs = document.createElementNS(NS, "defs");
+  const marker = document.createElementNS(NS, "marker");
+  marker.setAttribute("id", `arrow-${svgId}`);
+  marker.setAttribute("markerWidth", "6");
+  marker.setAttribute("markerHeight", "6");
+  marker.setAttribute("refX", "5");
+  marker.setAttribute("refY", "3");
+  marker.setAttribute("orient", "auto");
+  const arrowPath = document.createElementNS(NS, "path");
+  arrowPath.setAttribute("d", "M0,0 L6,3 L0,6 Z");
+  arrowPath.setAttribute("fill", "#888");
+  marker.appendChild(arrowPath);
+  defs.appendChild(marker);
+  svgEl.appendChild(defs);
+
+  function toScreen(xy) {
+    const [x, y] = xy;
+    return [PAD + (x + 1) / 2 * (W - 2 * PAD), PAD + (1 - (y + 1) / 2) * (H - 2 * PAD)];
+  }
+
+  const circuits = NAMED_CIRCUITS[opponentDef.circuitKey] || [];
+  const edgeCircuitColor = new Map();
+  circuits.forEach((circuit, ci) => {
+    if (circuitClosed(circuit, edgeMap, threshold)) {
+      const color = CIRCUIT_COLORS[ci % CIRCUIT_COLORS.length];
+      for (let i = 0; i < circuit.length - 1; i++) {
+        edgeCircuitColor.set(circuit[i] + "->" + circuit[i + 1], color);
+      }
+    }
+  });
+
+  for (const [key, j] of edgeMap) {
+    if (j < threshold) continue;
+    const [a, b] = key.split("->");
+    if (!pos[a] || !pos[b]) continue;
+    const color = edgeCircuitColor.get(key) || "#999";
+    const width = Math.max(j * 4, 0.6);
+    if (a === b) {
+      const [sx, sy] = toScreen(pos[a]);
+      const circle = document.createElementNS(NS, "circle");
+      circle.setAttribute("cx", sx + 11);
+      circle.setAttribute("cy", sy - 11);
+      circle.setAttribute("r", 7);
+      circle.setAttribute("fill", "none");
+      circle.setAttribute("stroke", color);
+      circle.setAttribute("stroke-width", width);
+      svgEl.appendChild(circle);
+    } else {
+      const [sx, sy] = toScreen(pos[a]);
+      const [tx, ty] = toScreen(pos[b]);
+      const line = document.createElementNS(NS, "line");
+      line.setAttribute("x1", sx); line.setAttribute("y1", sy);
+      line.setAttribute("x2", tx); line.setAttribute("y2", ty);
+      line.setAttribute("stroke", color);
+      line.setAttribute("stroke-width", width);
+      line.setAttribute("marker-end", `url(#arrow-${svgId})`);
+      line.setAttribute("opacity", "0.85");
+      svgEl.appendChild(line);
+    }
+  }
+
+  const smallFont = nodes.length > 30 ? 5 : 9;
+  for (const node of nodes) {
+    if (!pos[node]) continue;
+    const [sx, sy] = toScreen(pos[node]);
+    const isKey = (node === START_NODE || node === GOAL_NODE);
+    const rate = nodeRates ? nodeRates[node] : undefined;
+    const baseR = isKey ? 8 : 5;
+    const r = (rate === undefined) ? baseR : Math.max(baseR, 3 + rate * 9);
+    const circle = document.createElementNS(NS, "circle");
+    circle.setAttribute("cx", sx);
+    circle.setAttribute("cy", sy);
+    circle.setAttribute("r", r);
+    circle.setAttribute("fill", isKey ? "#ffe6a3" : "#dde3ea");
+    circle.setAttribute("stroke", isKey ? "#d4780a" : "#555");
+    circle.setAttribute("stroke-width", isKey ? 2 : 1);
+    svgEl.appendChild(circle);
+
+    const text = document.createElementNS(NS, "text");
+    text.setAttribute("x", sx);
+    text.setAttribute("y", sy - r - 3);
+    text.setAttribute("text-anchor", "middle");
+    text.setAttribute("font-size", smallFont);
+    text.setAttribute("class", "nodeLabel");
+    text.textContent = node;
+    svgEl.appendChild(text);
+  }
+
+  const reachable = bfsReachable(edgeMap, threshold, START_NODE, GOAL_NODE);
+  const indicator = document.createElementNS(NS, "text");
+  indicator.setAttribute("x", W / 2);
+  indicator.setAttribute("y", 14);
+  indicator.setAttribute("text-anchor", "middle");
+  indicator.setAttribute("font-size", 11);
+  indicator.setAttribute("fill", reachable ? "#1a7f37" : "#cf222e");
+  indicator.textContent = reachable ? "底底底→和和和: 到達可能" : "底底底→和和和: 到達不能";
+  svgEl.appendChild(indicator);
+
+  infoEl.innerHTML = "";
+  circuits.forEach((circuit, ci) => {
+    const jstar = circuitJStar(circuit, edgeMap);
+    const closed = circuitClosed(circuit, edgeMap, threshold);
+    const div = document.createElement("div");
+    div.className = "circuitEntry";
+    const swatch = document.createElement("span");
+    swatch.className = "swatch";
+    swatch.style.background = CIRCUIT_COLORS[ci % CIRCUIT_COLORS.length];
+    swatch.style.opacity = closed ? "1" : "0.25";
+    div.appendChild(swatch);
+    const label = document.createElement("span");
+    label.textContent = `#${ci + 1} j*=${jstar.toFixed(3)}${closed ? " (閉)" : ""}`;
+    div.appendChild(label);
+    infoEl.appendChild(div);
+  });
+}
+
+function render() {
+  if (!DATA) return;
+  const opp = OPPONENTS.find(o => o.ui === state.opponent);
+  document.getElementById("thresholdLabel").textContent = state.threshold.toFixed(2);
+
+  for (const group of HUMAN_GROUPS) {
+    const rows = (opp.humanKey && (DATA.human[opp.humanKey] || {})[group]) || [];
+    renderPanel(`svg-${group}`, `info-${group}`, opp, rows, null); // no human node-rate data
+  }
+
+  const abmByGrouping = ((DATA.abm[opp.abmKey] || {})[state.grouping]) || {};
+  const ages = Object.keys(abmByGrouping).map(Number).sort((a, b) => a - b);
+  state.availableAges = ages;
+
+  const genSlider = document.getElementById("genSlider");
+  genSlider.max = Math.max(ages.length - 1, 0);
+  if (state.genIndex >= ages.length) state.genIndex = 0;
+  genSlider.value = state.genIndex;
+
+  document.getElementById("abmTitle").textContent = `Kモデル (${document.getElementById("groupingSelect").selectedOptions[0].textContent})`;
+  if (ages.length === 0) {
+    document.getElementById("genLabel").textContent = "データなし";
+    renderPanel("svg-ABM", "info-ABM", opp, [], null);
+  } else {
+    const currentAge = ages[state.genIndex];
+    document.getElementById("genLabel").textContent = `世代 ${currentAge}`;
+    const nodeRates = NODE_DATA && (((NODE_DATA.abm_nodes[opp.abmKey] || {})[state.grouping] || {})[currentAge]) || null;
+    renderPanel("svg-ABM", "info-ABM", opp, abmByGrouping[currentAge], nodeRates);
+  }
+}
+
+function setupControls() {
+  document.getElementById("opponentSelect").addEventListener("change", e => {
+    state.opponent = e.target.value; state.genIndex = 0; render();
+  });
+  document.getElementById("groupingSelect").addEventListener("change", e => {
+    state.grouping = e.target.value; state.genIndex = 0; render();
+  });
+  document.getElementById("thresholdSlider").addEventListener("input", e => {
+    state.threshold = parseInt(e.target.value, 10) / 100; render();
+  });
+  document.getElementById("genSlider").addEventListener("input", e => {
+    state.genIndex = parseInt(e.target.value, 10); render();
+  });
+
+  document.getElementById("thresholdPlay").addEventListener("click", function () {
+    if (thresholdTimer) {
+      clearInterval(thresholdTimer); thresholdTimer = null; this.textContent = "再生";
+      return;
+    }
+    this.textContent = "停止";
+    thresholdTimer = setInterval(() => {
+      const slider = document.getElementById("thresholdSlider");
+      let v = parseInt(slider.value, 10) + 1;
+      if (v > 80) v = 1;
+      slider.value = v;
+      state.threshold = v / 100;
+      render();
+    }, 350);
+  });
+
+  document.getElementById("genPlay").addEventListener("click", function () {
+    if (genTimer) {
+      clearInterval(genTimer); genTimer = null; this.textContent = "再生";
+      return;
+    }
+    this.textContent = "停止";
+    genTimer = setInterval(() => {
+      const max = state.availableAges.length - 1;
+      if (max < 0) return;
+      let v = state.genIndex + 1;
+      if (v > max) v = 0;
+      state.genIndex = v;
+      document.getElementById("genSlider").value = v;
+      render();
+    }, 450);
+  });
+}
+
+async function init() {
+  setupControls();
+  try {
+    await loadData();
+  } catch (e) {
+    document.getElementById("status").textContent =
+      "k_model_edges.json を読み込めませんでした(" + e.message + ")。" +
+      "file:// で直接開いていないか確認し、簡易サーバー経由で開いてください(手順書参照)。";
+    return;
+  }
+  document.getElementById("status").textContent = "読み込み完了。";
+  render();
+}
+
+init();
+</script>
+</body>
+</html>

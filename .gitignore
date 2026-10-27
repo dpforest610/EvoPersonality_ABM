@@ -22,4 +22,5 @@ scripts/output/**/*_checkpoint.pkl.tmp
 scripts/output/coupling_markov_*/*_census.csv.gz
 scripts/output/coupling_markov_*/*_moves.csv.gz
 scripts/output/coupling_markov_*/*_recovery.csv.gz
-scripts/output/k_model_confirmatory_*/_age_cache/
+scripts/output/**/_age_cache/
+scripts/output/coupling_markov_production/viewer/index.html
