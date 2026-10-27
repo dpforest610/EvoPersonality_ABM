@@ -1,17 +1,31 @@
 # Kモデル Markov構造・本番結果報告
 
-- 状態:**本番データに基づく初版**
+- 状態:**本番データに基づく訂正版**(初版commit`d8b6392`はH-B・H-Cの統計量の
+  符号に誤りがあり、本版で訂正——下記「訂正について」を参照)
 - 対象ブランチ:`claude/k-model-markov-probe`
 - 事前登録:`docs/PREREGISTRATION_k_model_markov.md`(確定コミット`82203334`)
 - データ:seed 200〜269(70/70完走、事前登録7節の除外規則どおり除外なし)。
   分析窓はgen 1000〜5000(プローブ間隔50、81時点)。
 - 逸脱:`docs/DEVIATION_k_model_group_size.md`(2節で要約)。
 - 集計元:`scripts/output/k_model_confirmatory_production/k_model_confirmatory_summary.json`
-  (確証的分析、コミット`cab6ae92`)、`scripts/output/k_model_confirmatory_production/
-  permutation_null_center.csv`(3節の探索的分析、Macで生成・push予定)。
+  (確証的分析、訂正後コミット`614ae04`)、`scripts/output/k_model_confirmatory_production/
+  permutation_null_center.csv`(3節の探索的分析、訂正後コミット`614ae04`)。
 
 **本報告は確証的な結果(事前登録4〜5節)と、事前登録外の探索的な結果を
 はっきり分けて記載する。4節は事実の記述のみで、解釈・考察はまだ書いていない。**
+
+## 訂正について(`docs/DEVIATION_k_model_group_size.md`7節)
+
+確証的分析のコード(`scripts/run_k_model_confirmatory_analysis.py`)は、H-B・H-Cの差を
+「戻れた割合(n_recovered/n)」のK-恐れ型−K-安定型で計算しながら、それを事前登録の
+統計量「戻れなかった割合(never_recovered_rate)」のK-恐れ型−K-安定型として扱っていた
+(符号がちょうど逆)。この誤りはコードの不具合であり、事前登録からの逸脱ではない。
+最初に出力された`k_model_confirmatory_summary.json`(commit`cab6ae92`)のH-B・H-Cの
+判定(H-B支持、H-C部分的に支持)は、この誤りにより、本来は支持されない結果を
+「支持」と判定していた。コードを修正し(`never_recovered_rate`の差に直す)、修正前に
+書かれた時点ごとのキャッシュはその場で符号を反転して読み直す形で、計算をやり直さず
+要約を作り直した(`normalize_cached_result`)。**H-AとH-B・H-Cの件数(n・n_recovered)
+自体は、最初から影響を受けていない。** 本報告はこの訂正後の値(commit`614ae04`)を使う。
 
 ## p値・判定の書き方について
 
@@ -65,29 +79,29 @@ Secureより他の2群の網に近い)。
 
 **判定:支持**
 
-### H-B(回復):never_recovered_rate が K-安定型 < K-恐れ型 か(SELF・POP)
+### H-B(回復):never_recovered_rate が K-安定型 < K-恐れ型 か(SELF・POP)【訂正後】
 
 | 比較 | 点推定の差 | seedブートストラップ | Holm | 置換検定 | 両方有意 |
 |---|---|---|---|---|---|
-| H-B1(SELF):never_recovered_rate(K_Fearful,SELF)-never_recovered_rate(K_Secure,SELF) | +0.0913 | p < 1/2001 | ○ | p < 1/1001 | ○ |
-| H-B2(POP):never_recovered_rate(K_Fearful,POP)-never_recovered_rate(K_Secure,POP) | +0.0849 | p = .0010 | ○ | p < 1/1001 | ○ |
+| H-B1(SELF):never_recovered_rate(K_Fearful,SELF)-never_recovered_rate(K_Secure,SELF) | -0.0913 | p > 2000/2001 | × | p > 1000/1001 | × |
+| H-B2(POP):never_recovered_rate(K_Fearful,POP)-never_recovered_rate(K_Secure,POP) | -0.0849 | p = .9995 | × | p > 1000/1001 | × |
 
-**判定:H-B1(SELF)支持、H-B2(POP)支持**
+**判定:H-B1(SELF)支持されない、H-B2(POP)支持されない**(両比較とも点推定の差の
+符号が予想と逆——never_recovered_rateはK-恐れ型のほうがK-安定型より低い)。
 
 ### H-C1(記憶の深さの層):H-B1の差は、実効記憶深さ(depthLow 0〜2 / depthMid 3 / depthHigh 4以上)の
-どの層でも残るか(SELF)
+どの層でも残るか(SELF)【訂正後】
 
 最低人数(20、事前登録4節で確定)を下回る層はなかった(`untestable_strata: []`、3層とも検定可能)。
 
 | 層 | 点推定の差 | seedブートストラップ | Holm | 置換検定 | 両方有意 |
 |---|---|---|---|---|---|
-| depthLow(0〜2) | -0.0152 | p = .7546 | × | p < 1/1001 | × |
-| depthMid(3) | +0.1263 | p < 1/2001 | ○ | p < 1/1001 | ○ |
-| depthHigh(4以上) | +0.1465 | p < 1/2001 | ○ | p < 1/1001 | ○ |
+| depthLow(0〜2) | +0.0152 | p = .2459 | × | p > 1000/1001 | × |
+| depthMid(3) | -0.1263 | p > 2000/2001 | × | p > 1000/1001 | × |
+| depthHigh(4以上) | -0.1465 | p > 2000/2001 | × | p > 1000/1001 | × |
 
-**判定:部分的に支持**(depthLowのみ両方有意にならない。depthLowはseedブートストラップの
-時点で既に有意でない[p=.7546]——置換検定だけが有意になる理由は、本物の値ではなく
-帰無分布の中心のほうが0から離れているためである可能性があり、3節[探索的]で記述する)。
+**判定:支持されない**(3層とも「両方有意」にならない。depthMid・depthHighは
+点推定の差の符号も予想と逆)。
 
 ### まとめ(事実のみ、解釈は書かない)
 
@@ -96,9 +110,9 @@ Secureより他の2群の網に近い)。
 | H-A1(K-安定型↔Secure) | 支持されない |
 | H-A2(合成Mix↔Mix) | 支持 |
 | H-A3(K-恐れ型↔Fearful) | 支持 |
-| H-B1(SELF) | 支持 |
-| H-B2(POP) | 支持 |
-| H-C1(記憶の深さ) | 部分的に支持(depthLowのみ通らない) |
+| H-B1(SELF) | 支持されない |
+| H-B2(POP) | 支持されない |
+| H-C1(記憶の深さ) | 支持されない |
 
 ---
 
@@ -122,6 +136,9 @@ Secureより他の2群の網に近い)。
 その時点でK-恐れ型の個体がいたseedの数[最少63])。K-安定型は56、合成Mixは46で、
 どちらも全81時点で変動なし(不足がなかったため)。
 
+(1節のH-B・H-Cの符号訂正は、上の人数の規則とは別の問題——コードの不具合であり、
+事前登録からの逸脱ではない。「訂正について」節を参照。)
+
 ---
 
 ## 3. 探索的な記述(事前登録外と明記、解釈はまだ書かない)
@@ -132,32 +149,24 @@ Secureより他の2群の網に近い)。
 (平均)と、本物の差との差(「型そのものの分」)を別途計算すれば、本物の差の見かけの
 符号・大きさが、系統間の違いだけでどこまで説明されるかを記述できる。
 
-計算は`scripts/analyze_k_model_permutation_null_center.py`で行う。この文書を書いた
-時点では、置換ごとの生の値(`_age_cache`)はMacにしかなくこのクラウド環境からは
-読めないため、**下表はMacでこのスクリプトを実行してから記入する**
-(`docs/K_MODEL_MARKOV_MAC_RUNBOOK.md`9節に手順を書いた)。
+計算は`scripts/analyze_k_model_permutation_null_center.py`で行った
+(`scripts/output/k_model_confirmatory_production/permutation_null_center.csv`、
+訂正後コミット`614ae04`)。
 
 | 仮説 | 比較 | 本物の差(true) | 置換の中心(null_center) | その差(type_only) |
 |---|---|---|---|---|
-| H-A1 | r(K_Secure,Secure)-r(K_Secure,Mix) | | | |
-| H-A1 | r(K_Secure,Secure)-r(K_Secure,Fearful) | | | |
-| H-A2 | r(Mix,Mix)-r(Mix,Secure) | | | |
-| H-A2 | r(Mix,Mix)-r(Mix,Fearful) | | | |
-| H-A3 | r(K_Fearful,Fearful)-r(K_Fearful,Secure) | | | |
-| H-A3 | r(K_Fearful,Fearful)-r(K_Fearful,Mix) | | | |
-| H-B1 | never_recovered_rate(K_Fearful,SELF)-(K_Secure,SELF) | | | |
-| H-B2 | never_recovered_rate(K_Fearful,POP)-(K_Secure,POP) | | | |
-| H-C1 | depthLow | | | |
-| H-C1 | depthMid | | | |
-| H-C1 | depthHigh | | | |
+| H-A1 | r(K_Secure,Secure)-r(K_Secure,Mix) | -0.0419 | -0.0305 | -0.0114 |
+| H-A1 | r(K_Secure,Secure)-r(K_Secure,Fearful) | -0.0172 | -0.0216 | +0.0044 |
+| H-A2 | r(Mix,Mix)-r(Mix,Secure) | +0.0311 | +0.0294 | +0.0017 |
+| H-A2 | r(Mix,Mix)-r(Mix,Fearful) | +0.0106 | +0.0083 | +0.0023 |
+| H-A3 | r(K_Fearful,Fearful)-r(K_Fearful,Secure) | +0.0363 | +0.0210 | +0.0153 |
+| H-A3 | r(K_Fearful,Fearful)-r(K_Fearful,Mix) | +0.0245 | -0.0077 | +0.0321 |
+| H-B1 | never_recovered_rate(K_Fearful,SELF)-(K_Secure,SELF) | -0.0913 | -0.0320 | -0.0593 |
+| H-B2 | never_recovered_rate(K_Fearful,POP)-(K_Secure,POP) | -0.0849 | -0.0467 | -0.0382 |
+| H-C1 | depthLow | +0.0152 | +0.0501 | -0.0349 |
+| H-C1 | depthMid | -0.1263 | -0.0508 | -0.0754 |
+| H-C1 | depthHigh | -0.1465 | -0.0817 | -0.0648 |
 
-(「本物の差」列は`k_model_confirmatory_summary.json`の`permutation`配列に既にある
-`true_diff_window_avg`と同じ値になるはずで、Mac実行後の値がこの文書の1節の表の
-点推定と一致することを確認する——一致しなければスクリプトかキャッシュに問題がある。)
-
-**参考(まだこのクラウド環境では検証できていない値、安念がMacで計算したもの)**:
-H-A2の「型そのものの分」は+.002、H-A3は+.015と+.032、H-Bは SELF +.059・POP +.038、
-H-Cは浅い層+.035・中くらいの層+.075・深い層+.065。これらは上表を記入する際の
-参照値であり、まだこの文書の確定した値としては記載していない(どの比較に対応する
-値かが、上表の行ラベルと1対1で確認できていないため——特にH-A2は比較が2つあるのに
-対し、与えられた値は1つのみ)。
+(「本物の差」列は`k_model_confirmatory_summary.json`の`permutation`配列の
+`true_diff_window_avg`と一致している——1節の点推定と、丸め誤差の範囲で一致することを
+確認済み。)
