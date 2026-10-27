@@ -48,8 +48,6 @@ Usage (see docs/K_MODEL_MARKOV_MAC_RUNBOOK.md for the full Mac command):
 """
 
 import argparse
-import csv
-import gzip
 import importlib.util
 import json
 import pickle
@@ -82,9 +80,19 @@ from evopersonality_abm.k_model_confirmatory import (  # noqa: E402
     permutation_pvalue,
     verdict,
 )
+from evopersonality_abm.k_model_cross_lineage import (  # noqa: E402
+    draw_cross_lineage_identities,
+    draw_cross_lineage_identities_from_resampled_seeds,
+    effective_group_size,
+    load_series_first_rounds,
+    lookup_series,
+    merge_type_membership,
+    seeds_with_type,
+    type_membership_from_labels,
+)
 from evopersonality_abm.lindgren import LindgrenTable, effective_memory_depth  # noqa: E402
 from evopersonality_abm.markov_apply import load_human_weights  # noqa: E402
-from evopersonality_abm.markov_recovery import build_edges, load_vocab, self_loop_edges, series_from_moves  # noqa: E402
+from evopersonality_abm.markov_recovery import build_edges, load_vocab, self_loop_edges  # noqa: E402
 
 # Imported the same way scripts/export_k_model_markov_viewer.py imports
 # scripts/run_coupling_markov_pilot.py -- a script, not a package module.
@@ -101,36 +109,6 @@ VOCAB_NAME = {"TFT": "TFT", "Random": "RAN", "AllC": "AllC", "AllD": "AllD", "Gr
 
 
 # ------------------------------------------------------------------ loading + pool construction
-
-def load_series_first_rounds(moves_path: Path, main_analysis_rounds: int = 20) -> Dict[str, Dict[int, List[str]]]:
-    """Same output as viewer_mod.load_series_by_genotype_all_opponents, but
-    rows past round `main_analysis_rounds` are skipped before any parsing:
-    series_from_moves only ever reads the first `main_analysis_rounds`
-    moves, and the moves file stores 100 rounds per duel, so ~80% of the
-    rows were parsed for nothing (tests check the outputs are equal)."""
-    own: Dict[Tuple[str, int, int], Dict[int, str]] = defaultdict(dict)
-    opp: Dict[Tuple[str, int, int], Dict[int, str]] = defaultdict(dict)
-    with gzip.open(moves_path, "rt", newline="") as f:
-        reader = csv.reader(f)
-        header = next(reader)
-        i_gid, i_opp, i_rep, i_rnd = (header.index(c) for c in ("genotype_id", "opponent", "repeat", "round"))
-        i_own, i_om = header.index("own_move"), header.index("opp_move")
-        for row in reader:
-            rnd = int(row[i_rnd])
-            if rnd > main_analysis_rounds:
-                continue
-            key = (row[i_opp], int(row[i_gid]), int(row[i_rep]))
-            own[key][rnd] = row[i_own]
-            opp[key][rnd] = row[i_om]
-    result: Dict[str, Dict[int, List[str]]] = defaultdict(lambda: defaultdict(list))
-    for (opponent, gid, repeat), own_by_round in own.items():
-        max_round = max(own_by_round)
-        own_moves = [own_by_round[i] for i in range(1, max_round + 1)]
-        opp_moves = [opp[(opponent, gid, repeat)][i] for i in range(1, max_round + 1)]
-        series = series_from_moves(own_moves, opp_moves, n_rounds=main_analysis_rounds)
-        result[opponent][gid].append(series)
-    return {k: dict(v) for k, v in result.items()}
-
 
 def load_one_seed_age(data_dir: Path, seed: int, age: int):
     """(census_with_k, series_by_opponent, recovery_rows) for one (seed,
@@ -150,30 +128,6 @@ def census_true_types(census, threshold_kout: float, threshold_kself: float) -> 
     return {gid: viewer_mod.classify_type(k_out, k_self, threshold_kout, threshold_kself) for gid, _f, _md, _t, _p, k_out, k_self in census}
 
 
-def merge_type_membership(members_a: Tuple[Dict[int, int], Dict[int, tuple]], members_b: Tuple[Dict[int, int], Dict[int, tuple]]):
-    freq_a, idents_a = members_a
-    freq_b, idents_b = members_b
-    freq = dict(freq_a)
-    freq.update(freq_b)  # gids are disjoint (two different types partition the same census)
-    idents = dict(idents_a)
-    idents.update(idents_b)
-    return freq, idents
-
-
-def type_membership_from_labels(census, gid_to_type: Dict[int, str], type_name: str) -> Tuple[Dict[int, int], Dict[int, tuple]]:
-    """(frequencies, identities) for genotypes labeled `type_name` under
-    `gid_to_type` (either the true classify_type labels, or a permuted
-    relabeling -- see permute_type_labels)."""
-    freq: Dict[int, int] = {}
-    idents: Dict[int, tuple] = {}
-    for gid, f, md, t, p, _k_out, _k_self in census:
-        if gid_to_type.get(gid) != type_name:
-            continue
-        freq[gid] = f
-        idents[gid] = (md, t, p)
-    return freq, idents
-
-
 def permute_type_labels(gid_to_true_type: Dict[int, str], rng: random.Random) -> Dict[int, str]:
     """Random relabeling of each GENOTYPE's type at one (seed, age),
     preserving the overall per-type genotype count exactly (preregistration
@@ -190,69 +144,6 @@ def permute_type_labels(gid_to_true_type: Dict[int, str], rng: random.Random) ->
     shuffled = labels[:]
     rng.shuffle(shuffled)
     return dict(zip(gids, shuffled))
-
-
-def draw_cross_lineage_identities(type_pools: Dict[int, Tuple[Dict[int, int], Dict[int, tuple]]], group_size: int, rng: random.Random) -> List[Tuple[int, int]]:
-    """[(seed, gid), ...] of length group_size: group_size DISTINCT seeds,
-    one genotype per seed (frequency-weighted) -- same selection as
-    evopersonality_abm.markov_apply.resample_cross_seed_group, but returns
-    the (seed, gid) identity instead of looking up a specific opponent's
-    series, so the SAME draw can be reused across all 5 human opponents
-    (preregistration section 4: one virtual group, not independently
-    redrawn per opponent)."""
-    seeds = [s for s in type_pools if type_pools[s][0]]
-    if group_size > len(seeds):
-        raise ValueError(f"group_size={group_size} exceeds available seeds={len(seeds)}")
-    chosen_seeds = rng.sample(seeds, group_size)
-    result = []
-    for s in chosen_seeds:
-        frequencies, _idents = type_pools[s]
-        gids = list(frequencies.keys())
-        weights = [frequencies[g] for g in gids]
-        g = rng.choices(gids, weights=weights, k=1)[0]
-        result.append((s, g))
-    return result
-
-
-def seeds_with_type(type_pools) -> List[int]:
-    return [s for s in type_pools if type_pools[s][0]]
-
-
-def effective_group_size(target: int, n_available: int) -> int:
-    """docs/DEVIATION_k_model_group_size.md: when fewer lineages carry a
-    type than the human group size, the cross-lineage group uses every
-    available lineage (one individual each) instead of failing."""
-    return min(target, n_available)
-
-
-def draw_cross_lineage_identities_from_resampled_seeds(
-    type_pools: Dict[int, Tuple[Dict[int, int], Dict[int, tuple]]], resampled_seed_list: Sequence[int], group_size: int, rng: random.Random,
-) -> List[Tuple[int, int]]:
-    """Seed-bootstrap variant of draw_cross_lineage_identities (section
-    5-2): group_size DISTINCT POSITIONS from `resampled_seed_list` (a
-    seed id may repeat at different positions, each contributing its own
-    independent individual) -- mirrors
-    markov_apply.draw_cross_lineage_group_from_resampled_seeds."""
-    if group_size > len(resampled_seed_list):
-        raise ValueError(f"group_size={group_size} exceeds resampled list length={len(resampled_seed_list)}")
-    chosen_positions = rng.sample(range(len(resampled_seed_list)), group_size)
-    result = []
-    for pos in chosen_positions:
-        s = resampled_seed_list[pos]
-        frequencies, _idents = type_pools[s]
-        gids = list(frequencies.keys())
-        weights = [frequencies[g] for g in gids]
-        g = rng.choices(gids, weights=weights, k=1)[0]
-        result.append((s, g))
-    return result
-
-
-def lookup_series(identities: List[Tuple[int, int]], series_by_seed_opponent: Dict[int, Dict[str, Dict[int, list]]], opponent: str, rng: random.Random) -> List[str]:
-    out = []
-    for seed, gid in identities:
-        options = series_by_seed_opponent.get(seed, {}).get(opponent, {}).get(gid, [])
-        out.append(rng.choice(options) if options else "")
-    return out
 
 
 def build_edges_for_series(series_list: List[str], vocab) -> Dict[Tuple[str, str], float]:
