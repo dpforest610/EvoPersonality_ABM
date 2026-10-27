@@ -14,7 +14,9 @@
 パラメータにも既に対応済み——名前は「pilot」だが汎用)、
 `scripts/compute_k_model_type_thresholds.py`(しきい値)、
 `scripts/run_k_model_confirmatory_analysis.py`(確証的分析、置換検定を含む)、
-`scripts/check_coupling_markov_progress.py`(進捗確認、新規)。
+`scripts/check_coupling_markov_progress.py`(進捗確認)、
+`scripts/analyze_k_model_permutation_null_center.py`(9節、置換検定の帰無分布の
+中心——事前登録外の探索的分析)。
 
 ---
 
@@ -328,3 +330,82 @@ git push
 
 **この結果の中身(どの仮説が支持されたか)は、まだ解釈しない。** 事前登録の
 手順どおりに出た生の判定を、次の段階で安念が確認する。
+
+---
+
+## 9. 置換検定の帰無分布の中心(事前登録外、探索的)
+
+`docs/K_MODEL_MARKOV_RESULTS.md`3節のための分析。置換検定(8節)はラベルを
+**各seedの中で**入れ替えるため、帰無分布は必ずしも0を中心にしない(系統間の
+違いそのものが帰無分布にも残る)。置換検定のp値は本物の値が帰無分布の
+どこに位置するかしか示さないので、帰無分布の中心(平均)そのものと、
+本物の値との差(「型そのものの分」)を別途計算する。
+
+8節の`_age_cache/`(時点ごとにキャッシュされた、置換ごとの生の値)を読む
+ので、**8節の確証的分析を実行したのと同じMac・同じ`--results-dir`で**実行する
+(`_age_cache/`は`.gitignore`対象でpushされていないため、Mac以外では読めない)。
+
+```bash
+venv/bin/python scripts/analyze_k_model_permutation_null_center.py \
+  --results-dir scripts/output/k_model_confirmatory_production \
+  --window-start 1000 --window-end 5000 \
+  --out-csv scripts/output/k_model_confirmatory_production/permutation_null_center.csv
+```
+
+H-A・H-B・H-Cのすべての比較(11行)について、`true_diff_window_avg`(本物の差)・
+`null_center`(置換の帰無分布の中心)・`effect_type_only`(その差)・
+`n_permutations_used`を1行ずつ出力する。小さいスクリプトなので数秒〜数十秒で
+終わる(81時点分の`_age_cache`を読むだけで、新しい抽出・置換は行わない)。
+
+結果はリポジトリに入れる:
+
+```bash
+git add scripts/output/k_model_confirmatory_production/permutation_null_center.csv
+git commit -m "K-model production: permutation null-center analysis (exploratory, section 3)"
+git push
+```
+
+書かれたCSVの値を`docs/K_MODEL_MARKOV_RESULTS.md`3節の表に転記する
+(この文書を書いた時点では`_age_cache`にアクセスできず、表は未記入のまま
+残している)。
+
+---
+
+## 10. 学会・口頭発表用の図(ヒラギノ角ゴ)
+
+8節の確証的分析(summary.json)とは別に、提示用の図を2枚作る。生のcensus/recovery
+データ(census.csv.gz・recovery.csv.gz、Macにしかない)を読むので、8節と同じMacで
+実行する(moves.csv.gzは読まないので、8節より高速)。
+
+```bash
+venv/bin/python scripts/plot_k_model_recovery_figures.py \
+  --data-dir scripts/output/coupling_markov_production --seeds 70 --seed-offset 200 \
+  --thresholds-json scripts/output/coupling_markov_production/analysis/type_thresholds.json \
+  --window-start 1000 --window-end 5000 --n-bootstrap-seed 2000 \
+  --out-dir scripts/output/figures
+```
+
+Macに実際にHiraginoフォント(Hiragino Sans / Hiragino Kaku Gothic ProN /
+Hiragino Kaku Gothic Pro のいずれか)が入っていることを確認してから実行する
+(入っていなければIPAGothicにフォールバックし、警告を標準エラーに出す)。
+
+書かれる2枚:
+- `k_model_recovery_rate_by_generation_SELF.png`:H-B、SELF相手の
+  「20回のうちに和和和へ戻れた割合」を世代ごとに、K-安定型・K-拒絶型・
+  K-とらわれ型・K-恐れ型の4類型で並べた折れ線図(seedをまたいだブートストラップ
+  2000回の95%帯付き)。
+- `k_model_recovery_rate_by_depth_stratum_SELF.png`:H-C、記憶の深さの3層
+  (depthLow/depthMid/depthHigh)ごとに、K-安定型とK-恐れ型の戻れた割合
+  (gen 1000〜5000平均)を並べた棒グラフ(同じブートストラップの95%誤差線)。
+
+どちらの図にも「中央値で無理やり分けた型であり、集団は連続した一つの雲」の
+注記が入っている。
+
+リポジトリに入れる:
+
+```bash
+git add scripts/output/figures/k_model_recovery_rate_by_generation_SELF.png
+git add scripts/output/figures/k_model_recovery_rate_by_depth_stratum_SELF.png
+git commit -m "K-model production: conference figures (H-B by generation, H-C by depth stratum)"
+git push
+```
