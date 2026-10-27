@@ -253,3 +253,45 @@ def test_process_one_age_uses_available_lineages_when_a_type_is_scarce(tmp_path)
         n_lineages = sum(1 for s in seeds if any(t in members for t in labels[s].values()))
         assert gs == min(50, n_lineages)
     assert any(gs < n_seeds for gs in result["ha_effective_group_size"].values())
+
+
+def test_hb_hc_statistics_are_never_recovered_fearful_minus_secure(tmp_path):
+    # Regression for the sign error: the preregistered H-B/H-C statistic is
+    # never_recovered(K_Fearful) - never_recovered(K_Secure). Build it by
+    # hand from the per-age counts and compare with what the pipeline reports.
+    n_seeds, age = 6, 1000
+    data_dir = make_tiny_production_data(tmp_path, n_seeds=n_seeds, n_genomes=12, age=age)
+    th = median_thresholds(data_dir, n_seeds, age)
+    seeds = list(range(n_seeds))
+    r = mod.process_one_age(
+        str(data_dir), age, seeds, th["threshold_kout"], th["threshold_kself"],
+        str(REPO_ROOT / "docs" / "human_network_weights.csv"),
+        n_draws_main=2, seedboot_resamples=mod.build_seedboot_resamples(seeds, 3, "s"),
+        n_permutations=2, permutation_draws_ha=2, master_seed="s",
+        ha_group_size={"K_Secure": 2, "Mix": 2, "K_Fearful": 2},
+    )
+    assert r["recovery_diff_convention"] == "never_recovered"
+    for hyp, label, opp in mod.HB_COMPARISONS:
+        if ("K_Fearful", opp) in r["hb_point"] and ("K_Secure", opp) in r["hb_point"]:
+            never = {t: 1 - r["hb_point"][(t, opp)][1] / r["hb_point"][(t, opp)][0] for t in ("K_Secure", "K_Fearful")}
+            expected = never["K_Fearful"] - never["K_Secure"]
+            assert abs(r["hb_perm_true"][label] - expected) < 1e-12
+            human_vectors = mod.build_human_concatenated_vectors(REPO_ROOT / "docs" / "human_network_weights.csv")
+            summary = mod.build_results([r], human_vectors)
+            row = [x for x in summary["hb"]["rows"] if x["comparison"] == label][0]
+            assert abs(row["point_diff"] - expected) < 1e-12
+
+
+def test_normalize_cached_result_negates_old_recovery_diffs():
+    old = {
+        "hb_seedboot_diffs": {"a": {0: 0.1}}, "hc_seedboot_diffs": {"b": {0: -0.2}},
+        "hb_perm_null": {"a": {0: 0.3}}, "hc_perm_null": {"b": {1: 0.4}},
+        "hb_perm_true": {"a": 0.5}, "hc_perm_true": {"b": -0.6},
+        "ha_perm_true": {"x": 0.7},
+    }
+    new = mod.normalize_cached_result(old)
+    assert new["hb_seedboot_diffs"] == {"a": {0: -0.1}} and new["hc_seedboot_diffs"] == {"b": {0: 0.2}}
+    assert new["hb_perm_null"] == {"a": {0: -0.3}} and new["hc_perm_null"] == {"b": {1: -0.4}}
+    assert new["hb_perm_true"] == {"a": -0.5} and new["hc_perm_true"] == {"b": 0.6}
+    assert new["ha_perm_true"] == {"x": 0.7}  # H-A untouched
+    assert mod.normalize_cached_result(new) is new  # idempotent on new caches

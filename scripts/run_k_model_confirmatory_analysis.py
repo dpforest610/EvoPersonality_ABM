@@ -536,11 +536,11 @@ def process_one_age(
             for opponent in ("SELF", "POP"):
                 c = tot_boot.get((type_name, ("opp", opponent)))
                 if c and c[0]:
-                    rate_by_type_opp[(type_name, opponent)] = c[1] / c[0]
+                    rate_by_type_opp[(type_name, opponent)] = 1 - c[1] / c[0]  # never_recovered_rate
             for stratum in HC_STRATA:
                 c = tot_boot.get((type_name, ("stratum", stratum)))
                 if c and c[0]:
-                    rate_by_type_stratum[(type_name, stratum)] = c[1] / c[0]
+                    rate_by_type_stratum[(type_name, stratum)] = 1 - c[1] / c[0]  # never_recovered_rate
         for hyp, label, opponent in HB_COMPARISONS:
             if ("K_Fearful", opponent) in rate_by_type_opp and ("K_Secure", opponent) in rate_by_type_opp:
                 hb_seedboot_diffs[label][i] = hb_comparison_diff(rate_by_type_opp, opponent)
@@ -585,11 +585,11 @@ def process_one_age(
     # H-B/H-C: true-label statistic (direct pooling, no draw-count issue)
     for hyp, label, opponent in HB_COMPARISONS:
         if (opponent in ("SELF", "POP")) and ("K_Fearful", opponent) in hb_point and ("K_Secure", opponent) in hb_point:
-            rate = {t: hb_point[(t, opponent)][1] / hb_point[(t, opponent)][0] for t in ("K_Secure", "K_Fearful")}
+            rate = {t: 1 - hb_point[(t, opponent)][1] / hb_point[(t, opponent)][0] for t in ("K_Secure", "K_Fearful")}  # never_recovered_rate
             hb_perm_true[label] = rate["K_Fearful"] - rate["K_Secure"]
     for stratum in HC_STRATA:
         if ("K_Fearful", stratum) in hc_point and ("K_Secure", stratum) in hc_point:
-            rate = {t: hc_point[(t, stratum)][1] / hc_point[(t, stratum)][0] for t in ("K_Secure", "K_Fearful")}
+            rate = {t: 1 - hc_point[(t, stratum)][1] / hc_point[(t, stratum)][0] for t in ("K_Secure", "K_Fearful")}  # never_recovered_rate
             hc_perm_true[stratum] = rate["K_Fearful"] - rate["K_Secure"]
 
     for i in range(n_permutations):
@@ -623,11 +623,11 @@ def process_one_age(
             for opponent in ("SELF", "POP"):
                 c = tot_perm.get((type_name, ("opp", opponent)))
                 if c and c[0]:
-                    rate_by_type_opp[(type_name, opponent)] = c[1] / c[0]
+                    rate_by_type_opp[(type_name, opponent)] = 1 - c[1] / c[0]  # never_recovered_rate
             for stratum in HC_STRATA:
                 c = tot_perm.get((type_name, ("stratum", stratum)))
                 if c and c[0]:
-                    rate_by_type_stratum[(type_name, stratum)] = c[1] / c[0]
+                    rate_by_type_stratum[(type_name, stratum)] = 1 - c[1] / c[0]  # never_recovered_rate
         for hyp, label, opponent in HB_COMPARISONS:
             if ("K_Fearful", opponent) in rate_by_type_opp and ("K_Secure", opponent) in rate_by_type_opp:
                 hb_perm_null[label][i] = hb_comparison_diff(rate_by_type_opp, opponent)
@@ -637,6 +637,7 @@ def process_one_age(
 
     return {
         "age": age,
+        "recovery_diff_convention": RECOVERY_DIFF_CONVENTION,
         "ha_point_edges": ha_point_edges,
         "ha_effective_group_size": effective_gs,
         "hb_point": hb_point,
@@ -725,7 +726,28 @@ def window_average_rate(points: List[Tuple[int, int]]) -> Optional[float]:
     return statistics.fmean(rates) if rates else None
 
 
+RECOVERY_DIFF_CONVENTION = "never_recovered"
+
+
+def normalize_cached_result(r: dict) -> dict:
+    """Age caches written before the sign fix (no "recovery_diff_convention"
+    key) stored H-B/H-C differences as recovered(F) - recovered(S), while
+    the preregistered statistic is never_recovered(F) - never_recovered(S)
+    -- exactly the negative. Negate those so old caches can be summarized
+    without recomputation. (H-A and all counts are unaffected.)"""
+    if r.get("recovery_diff_convention") == RECOVERY_DIFF_CONVENTION:
+        return r
+    r = dict(r)
+    for key in ("hb_seedboot_diffs", "hc_seedboot_diffs", "hb_perm_null", "hc_perm_null"):
+        r[key] = {label: {i: -v for i, v in d.items()} for label, d in r[key].items()}
+    for key in ("hb_perm_true", "hc_perm_true"):
+        r[key] = {label: -v for label, v in r[key].items()}
+    r["recovery_diff_convention"] = RECOVERY_DIFF_CONVENTION
+    return r
+
+
 def build_results(results: List[dict], human_vectors) -> dict:
+    results = [normalize_cached_result(r) for r in results]
     # H-A point estimate: window-average the per-age edge dicts, then concatenate + correlate once
     r_by_type_group: Dict[Tuple[str, str], float] = {}
     for type_name in HA_TYPES:
@@ -744,7 +766,10 @@ def build_results(results: List[dict], human_vectors) -> dict:
             points = [r["hb_point"][(type_name, opponent)] for r in results if (type_name, opponent) in r["hb_point"]]
             hb_point_rate[(type_name, opponent)] = window_average_rate(points)
     hb_point_diffs = {
-        label: hb_point_rate[("K_Fearful", opponent)] - hb_point_rate[("K_Secure", opponent)]
+        # hb_point_rate holds RECOVERED rates (n_recovered / n); the
+        # preregistered statistic is never_recovered(F) - never_recovered(S)
+        # = recovered(S) - recovered(F).
+        label: hb_point_rate[("K_Secure", opponent)] - hb_point_rate[("K_Fearful", opponent)]
         for hyp, label, opponent in HB_COMPARISONS
         if hb_point_rate.get(("K_Fearful", opponent)) is not None and hb_point_rate.get(("K_Secure", opponent)) is not None
     }
@@ -761,7 +786,7 @@ def build_results(results: List[dict], human_vectors) -> dict:
         if hc_n.get(("K_Secure", s), 0) >= HC_MIN_STRATUM_N and hc_n.get(("K_Fearful", s), 0) >= HC_MIN_STRATUM_N
     ]
     hc_point_diffs = {
-        s: hc_point_rate[("K_Fearful", s)] - hc_point_rate[("K_Secure", s)]
+        s: hc_point_rate[("K_Secure", s)] - hc_point_rate[("K_Fearful", s)]  # never(F) - never(S), see H-B above
         for s in testable_strata
         if hc_point_rate.get(("K_Fearful", s)) is not None and hc_point_rate.get(("K_Secure", s)) is not None
     }

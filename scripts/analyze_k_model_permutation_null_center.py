@@ -66,7 +66,7 @@ def load_cached_ages(cache_dir: Path, window_start: int, window_end: int):
         if not (window_start <= age <= window_end):
             continue
         with open(p, "rb") as f:
-            results.append(pickle.load(f))
+            results.append(confirmatory_mod.normalize_cached_result(pickle.load(f)))
     return results
 
 
