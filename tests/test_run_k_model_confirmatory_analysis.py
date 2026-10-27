@@ -140,6 +140,13 @@ def test_main_writes_summary_file(tmp_path):
         json.dump(thresholds, f)
 
     results_dir = tmp_path / "out"
+    # ProcessPoolExecutor pickles process_one_age by (module name, qualname)
+    # and re-resolves it through sys.modules in the worker -- another test
+    # file loading this script under the same ad-hoc module name can
+    # overwrite the registry entry between collection and this test's own
+    # execution, breaking that identity check. Re-assert it right before
+    # the call that actually triggers multiprocessing.
+    sys.modules["run_k_model_confirmatory_analysis"] = mod
     sys_argv_backup = sys.argv
     sys.argv = [
         "run_k_model_confirmatory_analysis.py",
