@@ -522,3 +522,82 @@ k_model_network_viewer.html`のまま)。
 図には「中央値で無理やり分けた型であり、集団は連続した一つの雲」の
 注記が常に表示されている。**探索的・事前登録外の可視化であり、
 確証的結果(`docs/K_MODEL_MARKOV_RESULTS.md`)の判定根拠ではない。**
+
+---
+
+## 13. 群の人数の影響を確かめる(事前登録外、探索的)
+
+K-安定型(目標56)・合成Mix(目標46)・K-恐れ型(目標69)は、系統間抽出の
+目標人数自体が違う。その違いが特定の値にどれだけ効くかを見るため、
+`scripts/export_k_model_equal_group_size_circuits.py`(新規)は、この3群を
+**すべて同じ人数(46人。その時点でこの3群に共通して確保できる最小値
+まで縮める)**で抽出した場合の値と、**今までどおり人の群に合わせた人数**
+(56/46/69、各群ごとに縮める)で抽出した場合の値を、同じ時点・同じ列に
+並べて出す。8節の確証的分析・11節のビューア用データとは別の、独立した
+探索的スクリプト(どちらかが未実行でも単独で動く)。
+
+計算する値(TFT・Gradual・AllC・AllDの4相手、81時点、3群それぞれ):
+- TFT・Gradualの底底底→和和和のwidest path
+- AllCの搾搾搾→和和和のwidest path
+- AllDの底底底→惨惨惨のwidest path
+- TFT・Gradual・AllCの協調の回路(和和和→和和搾→…)のj*
+- Gradualの搾惨搾⇔惨搾惨の回路(TFT自身のTable 7の回路定義を、
+  Gradualの網に当てはめて計算したもの——Gradual自身のTable 7の回路
+  一覧にはこの回路は入っていない)のj*
+
+### 13-1. 小規模の実測
+
+```bash
+time venv/bin/python scripts/export_k_model_equal_group_size_circuits.py \
+  --data-dir scripts/output/coupling_markov_production --seeds 70 --seed-offset 200 \
+  --thresholds-json scripts/output/coupling_markov_production/analysis/type_thresholds.json \
+  --window-start 1000 --window-end 1100 --n-draws 200 --workers 5 \
+  --out-csv /tmp/k_model_equal_group_size_circuits_timing_check.csv
+```
+
+(gen 1000・1050・1100の3時点だけ処理する。表示された`real`秒数を3で割り、
+81時点分に単純に伸ばした値を本番の見積もりとする。11節の書き出し[全8相手×
+5群]よりずっと軽い[4相手×3群のみ]ので、数分程度で終わると見込まれるが、
+実測ではないので必ずこの手順で更新すること。)
+
+終わったら削除してよい: `rm -f /tmp/k_model_equal_group_size_circuits_timing_check.csv`。
+
+### 13-2. 本番実行
+
+```bash
+mkdir -p logs
+nohup caffeinate -dimsu venv/bin/python scripts/export_k_model_equal_group_size_circuits.py \
+  --data-dir scripts/output/coupling_markov_production --seeds 70 --seed-offset 200 \
+  --thresholds-json scripts/output/coupling_markov_production/analysis/type_thresholds.json \
+  --window-start 1000 --window-end 5000 --n-draws 200 --workers 5 \
+  --out-csv scripts/output/coupling_markov_production/viewer/k_model_equal_group_size_circuits.csv \
+  > logs/k_model_equal_group_size_circuits.log 2>&1 &
+disown
+```
+
+### 13-3. 進捗・再開
+
+時点ごとに`<出力CSVのあるフォルダ>/_age_cache_equal_group_size/age_<N>.pkl`へ
+結果をキャッシュする(`.gitignore`の`scripts/output/**/_age_cache_equal_group_size/`
+パターンで既に対象)。`pkill`や停電で止まっても、**同じコマンドをもう一度
+打てば**キャッシュ済みの時点をスキップして再開する。
+
+```bash
+ps aux | grep export_k_model_equal_group_size_circuits | grep -v grep
+tail -40 logs/k_model_equal_group_size_circuits.log
+ls scripts/output/coupling_markov_production/viewer/_age_cache_equal_group_size/ | wc -l   # 完了済み時点数(81で全完了)
+```
+
+### 13-4. 結果の確認・push
+
+完了すると`k_model_equal_group_size_circuits.csv`が書かれる(列:age・group・
+metric・shared46_group_size・shared46_value・human_matched_group_size・
+human_matched_value)。軽量な集計CSVなのでリポジトリに入れる:
+
+```bash
+git add scripts/output/coupling_markov_production/viewer/k_model_equal_group_size_circuits.csv
+git commit -m "K-model: equal-group-size (46) vs human-matched-size circuit/widest-path comparison"
+git push
+```
+
+**この結果の中身(人数の違いが値にどれだけ効くか)は、まだ解釈しない。**
