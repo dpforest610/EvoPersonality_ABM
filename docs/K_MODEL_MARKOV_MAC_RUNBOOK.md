@@ -601,3 +601,38 @@ git push
 ```
 
 **この結果の中身(人数の違いが値にどれだけ効くか)は、まだ解釈しない。**
+
+---
+
+## 14. K_self × K_out平面の個体密度ヒートマップ(事前登録外、探索的)
+
+`scripts/plot_k_model_density_heatmap.py`(新規)は、`scripts/
+compute_k_model_type_thresholds.py`と同じ集計(seed×gen 1000以降の
+全時点をプールし、頻度で重み付け)から、K_self × K_out平面
+([0,1]×[0,1])の2次元ヒストグラムを描く。中央値の点線(プールした
+データから計算し直したもの——`type_thresholds.json`があればそこに
+記録済みの値と一致するはずだが、このスクリプトは独立に計算する)で
+4象限に区切り、各象限にK-安定型/K-拒絶型/K-とらわれ型/K-恐れ型の
+ラベルを添える。「中央値で無理やり分けた型であり、集団は連続した
+一つの雲」の注記付き。本番の生census(Mac local)を直接読むので、
+このMacで実行する。
+
+```bash
+venv/bin/python scripts/plot_k_model_density_heatmap.py \
+  --data-dir scripts/output/coupling_markov_production --seeds 70 --seed-offset 200 \
+  --min-generation 1000 --bins 60 \
+  --out-path scripts/output/figures/k_model_density_heatmap.png
+```
+
+(`--min-generation 1000`で、確証的分析・しきい値計算と同じgen 1000以降の
+全時点[プローブ間隔50、81時点]をプールする。`--bins 60`は60×60マスの
+解像度——Jaccardの図と違って1時点だけなので、計算はすぐ終わる
+[数秒〜数十秒程度]。)
+
+リポジトリに入れる:
+
+```bash
+git add scripts/output/figures/k_model_density_heatmap.png
+git commit -m "K-model: K_self x K_out density heatmap"
+git push
+```
