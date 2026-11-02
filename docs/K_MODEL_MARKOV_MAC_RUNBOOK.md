@@ -606,7 +606,7 @@ git push
 
 ## 14. K_self × K_out平面の個体密度ヒートマップ(事前登録外、探索的)
 
-`scripts/plot_k_model_density_heatmap.py`(新規)は、`scripts/
+`scripts/plot_k_model_density_heatmap.py`は、`scripts/
 compute_k_model_type_thresholds.py`と同じ集計(seed×gen 1000以降の
 全時点をプールし、頻度で重み付け)から、K_self × K_out平面
 ([0,1]×[0,1])の2次元ヒストグラムを描く。中央値の点線(プールした
@@ -616,6 +616,28 @@ compute_k_model_type_thresholds.py`と同じ集計(seed×gen 1000以降の
 ラベルを添える。「中央値で無理やり分けた型であり、集団は連続した
 一つの雲」の注記付き。本番の生census(Mac local)を直接読むので、
 このMacで実行する。
+
+**2026-11版での変更点**(個体ごとのK記録は`coupling_seed_sweep_5000gen`
+には存在しない——`run_coupling_seed_sweep.py`/`run_coupling_seed_sweep_50.py`
+のCSV出力は世代ごとの平均・標準偏差のみで、個体単位の値は保存していない
+ことを確認済み。よって引き続き本番のKモデルデータ
+[`coupling_markov_production`]を使う):
+
+1. K_selfまたはK_outがちょうど0か1の個体(変異を[0,1]に切り詰めたこと
+   による端の積み重ね)は、ヒートマップのマス目・色の尺度・周辺ヒスト
+   グラムのいずれからも除外する。中央値の点線は従来通り全個体(端を含む)
+   から計算する——これは他の分析で使っている実際の型分類しきい値と
+   一致させるため。除外した個体の割合を図の下に「端に張り付いた個体○%
+   (変異を0〜1に切り詰めたため)」と表示する。
+2. 内側のマスのうち最も個体数が多い場所(最頻値、赤い星で表示)と、
+   中央値を図の中にテキストで表示する(スライドの数値はこれに合わせて
+   直す)。
+3. 縦軸・横軸の外側にK_self・K_outそれぞれの周辺ヒストグラムを追加した
+   (同じ内側のみのデータ)。
+4. 「一つの雲」をもう一方向から示すため、`scripts/
+   plot_k_model_population_snapshot.py`(新規)を追加。あるseedのある
+   世代の個体(population_size=100人全員)だけを点で描いた図を、2〜3枚
+   (世代違い)並べる。
 
 ```bash
 venv/bin/python scripts/plot_k_model_density_heatmap.py \
@@ -627,12 +649,26 @@ venv/bin/python scripts/plot_k_model_density_heatmap.py \
 (`--min-generation 1000`で、確証的分析・しきい値計算と同じgen 1000以降の
 全時点[プローブ間隔50、81時点]をプールする。`--bins 60`は60×60マスの
 解像度——Jaccardの図と違って1時点だけなので、計算はすぐ終わる
-[数秒〜数十秒程度]。)
+[数秒〜数十秒程度]。端末に`boundary_pct=...`、`mode_kself=...`、
+`mode_kout=...`、`median_kself=...`、`median_kout=...`が表示されるので、
+スライドの数値をそこから直す。)
+
+続けて、一時点スナップショット図(例:seed 200、世代1000・3000・5000):
+
+```bash
+venv/bin/python scripts/plot_k_model_population_snapshot.py \
+  --data-dir scripts/output/coupling_markov_production --seed 200 \
+  --ages 1000 3000 5000 \
+  --out-path scripts/output/figures/k_model_population_snapshot.png
+```
+
+(他のseed・世代の組み合わせを見たい場合は`--seed`・`--ages`を変える。
+`--ages`は2枚でも3枚でも可。)
 
 リポジトリに入れる:
 
 ```bash
-git add scripts/output/figures/k_model_density_heatmap.png
-git commit -m "K-model: K_self x K_out density heatmap"
+git add scripts/output/figures/k_model_density_heatmap.png scripts/output/figures/k_model_population_snapshot.png
+git commit -m "K-model: density heatmap boundary handling, mode/median, marginals, population snapshot"
 git push
 ```

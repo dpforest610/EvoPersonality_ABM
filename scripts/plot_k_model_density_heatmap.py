@@ -12,6 +12,19 @@ carry as a caveat ("中央値で無理やり分けた型であり、集団は連
 that the median lines cut through, or shows visible structure (e.g.
 separated clusters) near the 4-way split.
 
+Individuals sitting exactly at K_self==0/1 or K_out==0/1 are an artifact
+of mutate_genome's clip to [0,1] (a pile-up at the boundary, not part of
+the continuous interior cloud). These are excluded from the 2D histogram
+(and from its color scale and the two marginal histograms); the excluded
+fraction is reported as a caption line instead. The median split lines
+are still computed from the FULL (unfiltered) pooled data, matching the
+actual thresholds used throughout the rest of this project's analysis
+(scripts/compute_k_model_type_thresholds.py) -- only the *display* of
+the density excludes the boundary pile-up, not the type-classification
+convention. The densest interior bin ("mode") is marked and annotated
+separately from the median, so a slide can report either number
+correctly.
+
 Reads raw per-age census data (Mac-local only, gitignored in production)
 -- THIS SCRIPT MUST RUN ON THE MAC where it lives. Writes only a PNG
 figure, which IS meant to be committed and pushed.
@@ -90,36 +103,103 @@ def load_pooled_k_values(data_dir: Path, seeds: List[int], min_generation: int, 
     return out
 
 
+def split_interior_and_boundary(values: List[Tuple[float, float]]) -> Tuple[List[Tuple[float, float]], float]:
+    """Separate individuals pinned exactly at a mutation-clip boundary
+    (k_out or k_self == 0.0 or 1.0) from the continuous interior cloud.
+    Returns (interior_values, boundary_pct)."""
+    interior = [(ko, ks) for ko, ks in values if 0.0 < ko < 1.0 and 0.0 < ks < 1.0]
+    n_total = len(values)
+    n_boundary = n_total - len(interior)
+    boundary_pct = 100.0 * n_boundary / n_total if n_total else 0.0
+    return interior, boundary_pct
+
+
+def find_mode_bin(counts: np.ndarray, xedges: np.ndarray, yedges: np.ndarray) -> Tuple[float, float]:
+    """Center of the most-populated bin of a 2D histogram (counts indexed
+    [x_bin, y_bin], matching numpy/matplotlib's own hist2d convention)."""
+    ix, iy = np.unravel_index(np.argmax(counts), counts.shape)
+    mode_x = (xedges[ix] + xedges[ix + 1]) / 2
+    mode_y = (yedges[iy] + yedges[iy + 1]) / 2
+    return mode_x, mode_y
+
+
 def plot_density_heatmap(values: List[Tuple[float, float]], bins: int, out_path: Path) -> None:
-    k_out = np.array([v[0] for v in values])
-    k_self = np.array([v[1] for v in values])
-    threshold_kself = statistics.median(k_self.tolist())
-    threshold_kout = statistics.median(k_out.tolist())
+    k_out_all = np.array([v[0] for v in values])
+    k_self_all = np.array([v[1] for v in values])
+    # Median split thresholds: computed from the FULL pooled data (same
+    # convention as compute_k_model_type_thresholds.py), NOT the
+    # boundary-excluded interior subset below -- these are the actual
+    # type-classification thresholds used elsewhere in this project.
+    threshold_kself = statistics.median(k_self_all.tolist())
+    threshold_kout = statistics.median(k_out_all.tolist())
 
-    fig, ax = plt.subplots(figsize=(7, 6.5))
-    h = ax.hist2d(k_self, k_out, bins=bins, range=[[0, 1], [0, 1]], cmap="viridis")
-    cbar = fig.colorbar(h[3], ax=ax)
-    cbar.set_label("個体数")
+    interior, boundary_pct = split_interior_and_boundary(values)
+    k_out = np.array([v[0] for v in interior])
+    k_self = np.array([v[1] for v in interior])
 
-    ax.axvline(threshold_kself, color="white", linestyle="--", linewidth=1.2, alpha=0.9)
-    ax.axhline(threshold_kout, color="white", linestyle="--", linewidth=1.2, alpha=0.9)
+    fig = plt.figure(figsize=(8, 7.6))
+    gs = fig.add_gridspec(
+        2, 3, width_ratios=[4, 1, 0.18], height_ratios=[1, 4],
+        hspace=0.06, wspace=0.08,
+    )
+    ax_histx = fig.add_subplot(gs[0, 0])
+    ax_main = fig.add_subplot(gs[1, 0])
+    ax_histy = fig.add_subplot(gs[1, 1])
+    cax = fig.add_subplot(gs[1, 2])
+
+    counts, xedges, yedges, image = ax_main.hist2d(k_self, k_out, bins=bins, range=[[0, 1], [0, 1]], cmap="viridis")
+    cbar = fig.colorbar(image, cax=cax)
+    cbar.set_label("個体数(端に張り付いた個体を除く)")
+
+    mode_kself, mode_kout = find_mode_bin(counts, xedges, yedges)
+
+    ax_main.axvline(threshold_kself, color="white", linestyle="--", linewidth=1.2, alpha=0.9)
+    ax_main.axhline(threshold_kout, color="white", linestyle="--", linewidth=1.2, alpha=0.9)
+    ax_main.plot(mode_kself, mode_kout, marker="*", markersize=16, markerfacecolor="red", markeredgecolor="white", markeredgewidth=0.8, linestyle="none", zorder=5)
 
     label_kwargs = dict(fontsize=9, color="white", ha="center", va="center")
-    ax.text(threshold_kself / 2, threshold_kout / 2, "K-恐れ型\n(低K_self・低K_out)", **label_kwargs)
-    ax.text(threshold_kself / 2, (threshold_kout + 1) / 2, "K-とらわれ型\n(低K_self・高K_out)", **label_kwargs)
-    ax.text((threshold_kself + 1) / 2, threshold_kout / 2, "K-拒絶型\n(高K_self・低K_out)", **label_kwargs)
-    ax.text((threshold_kself + 1) / 2, (threshold_kout + 1) / 2, "K-安定型\n(高K_self・高K_out)", **label_kwargs)
+    ax_main.text(threshold_kself / 2, threshold_kout / 2, "K-恐れ型\n(低K_self・低K_out)", **label_kwargs)
+    ax_main.text(threshold_kself / 2, (threshold_kout + 1) / 2, "K-とらわれ型\n(低K_self・高K_out)", **label_kwargs)
+    ax_main.text((threshold_kself + 1) / 2, threshold_kout / 2, "K-拒絶型\n(高K_self・低K_out)", **label_kwargs)
+    ax_main.text((threshold_kself + 1) / 2, (threshold_kout + 1) / 2, "K-安定型\n(高K_self・高K_out)", **label_kwargs)
 
-    ax.set_xlabel(f"K_self(中央値 {threshold_kself:.3f}で点線)")
-    ax.set_ylabel(f"K_out(中央値 {threshold_kout:.3f}で点線)")
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
-    ax.set_title(f"Kモデル個体密度:K_self × K_out平面(n={len(values)})")
+    ax_main.set_xlabel(f"K_self(中央値 {threshold_kself:.3f}で点線)")
+    ax_main.set_ylabel(f"K_out(中央値 {threshold_kout:.3f}で点線)")
+    ax_main.set_xlim(0, 1)
+    ax_main.set_ylim(0, 1)
 
-    fig.tight_layout(rect=(0, 0.045, 1, 1))
+    mode_label = f"最頻値(内側のマスで最も密度が高い場所): K_self={mode_kself:.3f}, K_out={mode_kout:.3f}(赤星)"
+    ax_main.text(0.02, 0.02, mode_label, transform=ax_main.transAxes, fontsize=7.5, color="white", ha="left", va="bottom")
+
+    # Marginal histograms -- same interior-only (boundary-excluded) data
+    # as the main heatmap, so the "one mountain" claim is about the same
+    # continuous cloud throughout the whole figure.
+    hist_bins = np.linspace(0, 1, bins + 1)
+    ax_histx.hist(k_self, bins=hist_bins, color="#3b528b")
+    ax_histx.set_xlim(0, 1)
+    ax_histx.axvline(threshold_kself, color="gray", linestyle="--", linewidth=1.0)
+    ax_histx.tick_params(axis="x", labelbottom=False)
+    ax_histx.set_ylabel("度数")
+
+    ax_histy.hist(k_out, bins=hist_bins, orientation="horizontal", color="#3b528b")
+    ax_histy.set_ylim(0, 1)
+    ax_histy.axhline(threshold_kout, color="gray", linestyle="--", linewidth=1.0)
+    ax_histy.tick_params(axis="y", labelleft=False)
+    ax_histy.set_xlabel("度数")
+
+    fig.suptitle(f"Kモデル個体密度:K_self × K_out平面(n={len(values)}、内側n={len(interior)})", y=0.98)
+
+    fig.subplots_adjust(left=0.1, right=0.92, top=0.93, bottom=0.11)
+    boundary_label = f"端に張り付いた個体{boundary_pct:.1f}%(変異を0〜1に切り詰めたため)"
+    fig.text(0.5, 0.03, boundary_label, ha="center", fontsize=8.5, color="black")
     fig.text(0.5, 0.012, CAVEAT_TEXT, ha="center", fontsize=8, color="gray")
     fig.savefig(out_path, dpi=140)
     print(f"wrote {out_path}", flush=True)
+    print(
+        f"boundary_pct={boundary_pct:.3f}% mode_kself={mode_kself:.4f} mode_kout={mode_kout:.4f} "
+        f"median_kself={threshold_kself:.4f} median_kout={threshold_kout:.4f}",
+        flush=True,
+    )
 
 
 def main():

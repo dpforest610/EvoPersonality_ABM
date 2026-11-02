@@ -62,6 +62,44 @@ def test_plot_density_heatmap_writes_png(tmp_path):
     assert out_path.stat().st_size > 0
 
 
+def test_split_interior_and_boundary_excludes_exact_0_and_1():
+    values = [(0.1, 0.2), (0.0, 0.5), (0.5, 1.0), (1.0, 1.0), (0.3, 0.7)]
+    interior, boundary_pct = mod.split_interior_and_boundary(values)
+    assert interior == [(0.1, 0.2), (0.3, 0.7)]
+    assert boundary_pct == 60.0
+
+
+def test_split_interior_and_boundary_all_interior_is_zero_pct():
+    values = [(0.1, 0.2), (0.3, 0.7)]
+    interior, boundary_pct = mod.split_interior_and_boundary(values)
+    assert interior == values
+    assert boundary_pct == 0.0
+
+
+def test_find_mode_bin_locates_peak_bin_center():
+    import numpy as np
+
+    counts = np.zeros((4, 4))
+    counts[1, 2] = 100  # x-bin 1, y-bin 2 is the densest
+    xedges = np.linspace(0, 1, 5)
+    yedges = np.linspace(0, 1, 5)
+    mode_x, mode_y = mod.find_mode_bin(counts, xedges, yedges)
+    assert mode_x == (xedges[1] + xedges[2]) / 2
+    assert mode_y == (yedges[2] + yedges[3]) / 2
+
+
+def test_plot_density_heatmap_handles_boundary_pileup(tmp_path):
+    # Half the mass pinned at the K_out==0 boundary; the heatmap/mode/
+    # color-scale must be computed from the remaining interior-only data,
+    # and must not crash when a sizable boundary fraction is excluded.
+    interior = [(0.4, 0.5), (0.5, 0.5), (0.6, 0.5)] * 10
+    boundary = [(0.0, 0.5)] * 10
+    out_path = tmp_path / "heatmap_boundary.png"
+    mod.plot_density_heatmap(interior + boundary, bins=10, out_path=out_path)
+    assert out_path.exists()
+    assert out_path.stat().st_size > 0
+
+
 def test_main_writes_png(tmp_path):
     data_dir = make_tiny_production_data(tmp_path, n_seeds=4, n_genomes=20, ages=(1000,))
     out_path = tmp_path / "out" / "heatmap.png"
