@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: "If you use this software or its data, please cite it as below."
+type: software
+title: "EvoPersonality_ABM: an agent-based model of coupling-strength (K) personality evolution"
+abstract: >-
+  Simulation code and analysis scripts for an agent-based model that adds a
+  two-component coupling strength (K_self, K_out) as an evolving trait on top
+  of Lindgren's (1991) memory-evolution model, examined through the Markov
+  structure (move-transition network) of the evolved strategies and compared
+  against human attachment-style groups.
+authors:
+  - family-names: Annen
+    given-names: Yasumasa
+    affiliation: Sapporo University of Health Sciences
+repository-code: "https://github.com/dpforest610/EvoPersonality_ABM"
+license: MIT
+# version / date-released: fill in at the first tagged public release.
+version: "0.1.0"  # TODO: update to the actual release tag
+date-released: "2026-11-16"  # TODO: update to the actual release date
+# doi: "10.5281/zenodo.TODO"  # TODO: uncomment and fill in once archived on Zenodo
+preferred-citation:
+  type: conference-paper  # TODO: change to `article` once journal details are known
+  title: "TODO: paper/talk title (HBES2026)"
+  authors:
+    - family-names: Annen
+      given-names: Yasumasa
+      affiliation: Sapporo University of Health Sciences
+  year: 2026
+  conference:
+    name: "Human Behavior and Evolution Society (HBES) 2026"
+  # doi: "10.xxxx/TODO"  # TODO: fill in once the paper/preprint DOI is assigned
