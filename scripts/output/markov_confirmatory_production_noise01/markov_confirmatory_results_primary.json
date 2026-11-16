@@ -1,0 +1,81 @@
+{
+  "role": "primary",
+  "preregistration_commit": "ccc0b1b7a76f22e150e7c097b1757b1fb8e54e0e",
+  "window": [
+    1000,
+    5000
+  ],
+  "n_seeds": 70,
+  "n_boot_point": 1000,
+  "n_bootstrap_seed": 2000,
+  "point_estimates": {
+    "TFT:S": 0.20125182027889305,
+    "TFT:M": 0.5282424649709525,
+    "TFT:F": 0.4277732071435713,
+    "AllC:S": 0.2038841180468992,
+    "AllC:M": 0.22213352394105212,
+    "AllC:F": 0.23668868701827983,
+    "AllD:S": 0.642369872915034,
+    "AllD:M": 0.5088607641662186,
+    "AllD:F": 0.6912308447118164
+  },
+  "confirmatory": [
+    {
+      "hypothesis": "H1_TFT",
+      "opponent": "TFT",
+      "verdict": "support",
+      "comparisons": [
+        {
+          "label": "r(M)-r(S)",
+          "point_estimate_diff": 0.32699064469205946,
+          "p_value": 0.0004997501249375312,
+          "significant_after_holm": true
+        },
+        {
+          "label": "r(F)-r(S)",
+          "point_estimate_diff": 0.22652138686467826,
+          "p_value": 0.0004997501249375312,
+          "significant_after_holm": true
+        }
+      ]
+    },
+    {
+      "hypothesis": "H2_AllD",
+      "opponent": "AllD",
+      "verdict": "support",
+      "comparisons": [
+        {
+          "label": "r(S)-r(M)",
+          "point_estimate_diff": 0.13350910874881539,
+          "p_value": 0.0004997501249375312,
+          "significant_after_holm": true
+        },
+        {
+          "label": "r(F)-r(M)",
+          "point_estimate_diff": 0.18237008054559778,
+          "p_value": 0.0004997501249375312,
+          "significant_after_holm": true
+        }
+      ]
+    },
+    {
+      "hypothesis": "H3_AllC",
+      "opponent": "AllC",
+      "verdict": "not supported",
+      "comparisons": [
+        {
+          "label": "r(F)-r(S)",
+          "point_estimate_diff": 0.03280456897138062,
+          "p_value": 0.25687156421789104,
+          "significant_after_holm": false
+        },
+        {
+          "label": "r(F)-r(M)",
+          "point_estimate_diff": 0.014555163077227706,
+          "p_value": 0.42278860569715143,
+          "significant_after_holm": false
+        }
+      ]
+    }
+  ]
+}

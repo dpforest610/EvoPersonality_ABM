@@ -1,0 +1,2 @@
+seed,beta_self_kself,beta_self_kout,beta_ctx_kself,beta_ctx_kout,beta1,beta2,gamma11,gamma22,gamma12,mean_beta1,mean_beta2,mean_gamma11,mean_gamma22,mean_gamma12,var_kout,var_kself,bc_kout,bc_kself,n_qualifying_gens
+2,0.00879442,0.00036878,0.00000000,0.00000000,0.00654900,0.00036448,-0.00586588,-0.00336774,0.00015256,0.00674884,0.00004517,-0.00709871,-0.00438990,0.00041675,0.08712038,0.05480505,0.54114566,0.55019654,30

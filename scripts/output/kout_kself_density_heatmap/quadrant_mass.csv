@@ -1,0 +1,5 @@
+quadrant,fraction_of_points
+"K_out<0.5, K_self<0.5",0.13139333333333333
+"K_out<0.5, K_self>=0.5",0.32444
+"K_out>=0.5, K_self<0.5",0.18964
+"K_out>=0.5, K_self>=0.5",0.35452666666666666

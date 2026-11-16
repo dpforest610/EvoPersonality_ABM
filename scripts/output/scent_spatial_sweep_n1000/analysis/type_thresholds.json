@@ -1,0 +1,49 @@
+{
+  "threshold_kself": 0.777047,
+  "threshold_kout": 0.5025085,
+  "n_rows": 2700000,
+  "per_condition_n": {
+    "none": 900000,
+    "random": 900000,
+    "scent": 900000
+  },
+  "conditions": [
+    "none",
+    "random",
+    "scent"
+  ],
+  "seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29
+  ],
+  "steady_state_min_gen": 2000,
+  "note": "pooled across all 3 conditions x 30 seeds x gen>=2000, replacing the seed-0-only prototype thresholds (0.7835265 / 0.4566165)"
+}

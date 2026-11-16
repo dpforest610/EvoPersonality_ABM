@@ -1,0 +1,25 @@
+{
+  "updated_at": "2026-10-11T05:28:55+00:00",
+  "git_commit": "defa657620beb2bef67597316077014e6470c2e6",
+  "machine": "vm",
+  "os": "Linux-6.18.44-fc-v114-x86_64-with-glibc2.39",
+  "python_version": "3.11.15 (main, Mar  3 2026, 09:26:23) [GCC 13.3.0]",
+  "movement": "random",
+  "p_move": 0.549684,
+  "model_params": {
+    "population_size": 100,
+    "rounds_per_duel": 50,
+    "point_mutation_rate": 0.05,
+    "duplication_rate": 0.02,
+    "split_rate": 0.02,
+    "max_memory_depth": 8,
+    "min_memory_depth": 0,
+    "k_mutation_std": 0.05,
+    "noise_std": 0.05,
+    "grid_width": 13,
+    "grid_height": 13,
+    "n_phases": 5,
+    "tau": 1.0,
+    "radius": 1
+  }
+}
