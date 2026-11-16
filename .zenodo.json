@@ -1,0 +1,31 @@
+{
+  "title": "EvoPersonality_ABM: an agent-based model of coupling-strength (K) personality evolution",
+  "description": "Simulation code and analysis scripts for an agent-based model that adds a two-component coupling strength (K_self, K_out) as an evolving trait on top of Lindgren's (1991) memory-evolution model, examined through the Markov structure (move-transition network) of the evolved strategies and compared against human attachment-style groups. Contains no individual-level human-participant data -- only group-level aggregates (see docs/human_network_weights.csv and docs/PUBLIC_RELEASE_AUDIT.md).",
+  "creators": [
+    {
+      "name": "Annen, Yasumasa",
+      "affiliation": "Sapporo University of Health Sciences"
+    }
+  ],
+  "access_right": "open",
+  "license": "MIT",
+  "upload_type": "software",
+  "keywords": [
+    "agent-based model",
+    "evolutionary personality",
+    "attachment theory",
+    "Lindgren model",
+    "iterated prisoner's dilemma",
+    "Kuramoto",
+    "Markov chain",
+    "coupling strength"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "TODO: paper/preprint DOI, once assigned",
+      "relation": "isSupplementTo",
+      "resource_type": "publication-article"
+    }
+  ],
+  "notes": "TODO before archiving on Zenodo: fill in related_identifiers.identifier with the real paper/preprint DOI, and remove this notes field."
+}
