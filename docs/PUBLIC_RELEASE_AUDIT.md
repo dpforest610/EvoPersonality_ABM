@@ -3,25 +3,23 @@
 実施日: 2026-11-16。対象: `git log --all`(全ブランチ・全リモート追跡ブランチ)の
 全履歴。本リポジトリをGitHubで公開した場合、全ブランチの全コミット履歴が
 閲覧可能になることを踏まえ、現在のデフォルトブランチ(`main`)だけでなく
-全履歴を対象に調べた。**この文書は点検結果の報告のみ。公開・履歴の書き換え・
-ファイルの削除は一切実行していない。**
+全履歴を対象に調べた。この文書は点検結果の報告として始まり、安念の判断
+(§9以降に記録)に沿って実行した作業も追記している。**ただし、GitHub上での
+公開(Public化)・履歴の書き換え(`git filter-repo`等によるコミットハッシュの
+変更)・ファイルの削除は、この文書を通じて一度も実行していない。**
 
 ## 結論(先に短く)
 
 - **人のデータ・秘密情報・50MB超のファイル: いずれもゼロ。この3点は公開して問題ない。**
-- **公開前に対処が必要な点が2つ:**
-  1. **`main`ブランチが論文の実データ・分析を一切含んでいない**(2026-08-28で止まっており、
-     ごく初期の試作コードのみ)。実際の研究(Markov構造分析・Kモデル)は
-     `claude/markov-production-analysis`と`claude/k-model-markov-probe`という
-     2本の長期ブランチにしかない。`main`をそのまま既定ブランチとして公開すると、
-     論文が記述する内容と一致しないコードだけが表に出る。
-  2. **研究者のMacの合成ホスト名`doeRyanoMacBook-Neo.local`**が、コミット
-     メッセージ191件と、現在のツリーにも残るファイルパス約495件に埋め込まれている。
-     機密情報ではないが、個人のPCを特定できる情報として公開前に残すか消すか判断が要る。
-- 整理すべき不要なブランチが8本ある(§5)。削除しても、論文が引用する8つの
-  コミットはすべて保持される設計で提案している。
-- 公開用の下書き(README・LICENSE・CITATION.cff・`.zenodo.json`)を
-  `claude/public-release-prep`ブランチに作成した(§6)。`main`にはまだ入れていない。
+- **ホスト名(`doeRyanoMacBook-Neo.local`)について**: 安念の判断により、**残す。履歴の
+  書き換えはしない**(§7は手順の案のみで、実行していない)。引用している8コミットの
+  ハッシュを変えないことを最優先した。
+- **`main`の内容について**: 安念の判断(案A)により、`claude/markov-production-analysis`と
+  `claude/public-release-prep`(`claude/k-model-markov-probe`+公開用の下書き)を
+  `--no-ff`でmainにマージ**済み**(force pushなし)。§9に作業記録。
+- 不要なブランチ8本の削除は、安念がタグのpushを確認してから別途実行する(§5・§9)。
+  **まだ削除していない。**
+- 公開(Public化)とZenodo連携の手順案は§10。
 
 ---
 
@@ -266,3 +264,126 @@ README・CITATION.cffが参照しているファイル(`docs/PREREGISTRATION_k_m
   ただし「査読対策メモ」のような、著者自身の戦略的な覚書きも含まれている。
   内容自体に問題はないが、このまま公開するか、覚書き部分を外すかは
   安念の判断による。
+
+---
+
+## 9. mainへのマージ作業の記録(安念の判断、案Aを実行)
+
+安念の判断に基づき、以下を実行した(force pushはしていない)。
+
+### 9-1. スナップショットタグ
+
+マージ前の各ブランチの先端に注釈付きタグを作成した:
+
+| タグ | 対象コミット |
+|---|---|
+| `snapshot/markov-production-analysis-20261116` | `6c43beb24762f82e44b9c147c50569d89270f2c7`(`claude/markov-production-analysis`の先端) |
+| `snapshot/k-model-markov-probe-20261116` | `48536964d8a5431a630ab8f9fcc2be256cbb569c`(`claude/k-model-markov-probe`の先端) |
+
+**このセッションの権限ではタグのpushがHTTP 403で拒否された**(ブランチのpushは
+問題なくできる)。安念の指示により、タグは安念のMacからpushしてもらう形にして
+マージ作業を先に進めた。ブランチ削除(§5)は、このタグがGitHub上に実際に
+載ったことを確認してから実行する。
+
+タグをpushするコマンド(安念のMacで、このリポジトリのクローン内で):
+
+```bash
+git fetch origin
+git tag -a snapshot/markov-production-analysis-20261116 6c43beb24762f82e44b9c147c50569d89270f2c7 -m "Snapshot before merging into main for public release (2026-11-16)"
+git tag -a snapshot/k-model-markov-probe-20261116 48536964d8a5431a630ab8f9fcc2be256cbb569c -m "Snapshot before merging into main for public release (2026-11-16)"
+git push origin snapshot/markov-production-analysis-20261116 snapshot/k-model-markov-probe-20261116
+```
+
+(ローカルに既にこれらのコミットがなければ、先に`git fetch origin
+claude/markov-production-analysis claude/k-model-markov-probe`で取得してから。)
+
+### 9-2. マージの実行
+
+`main`(`635ab597`)に対して、以下の順で`--no-ff`マージを実行した:
+
+1. `git merge --no-ff origin/claude/markov-production-analysis` —
+   **衝突なし**で完了。
+2. `git merge --no-ff origin/claude/public-release-prep`
+   (`claude/k-model-markov-probe`の全内容 + §6の公開用下書き一式を含む) —
+   **2箇所で衝突**。
+
+### 9-3. 衝突の解消
+
+| ファイル | 衝突の種類 | 解消内容 |
+|---|---|---|
+| `.gitignore` | テキストの衝突(両側とも末尾に別々のパターンを追加しただけで、内容的な対立ではない) | **両方の内容を残した**。`claude/markov-production-analysis`側が追加した5行(`*_probe_age_*_census.csv.gz`等)と、`claude/public-release-prep`側が追加した6行(`coupling_markov_*/*_census.csv.gz`等)を、順にそのまま連結した。 |
+| `evopersonality_abm/lindgren.py` | **サイレントな重複**(gitは衝突として検出しなかったが、`_table_ignores_oldest_round`と`effective_memory_depth`の2関数が、両ブランチが分岐後に独立に同じ内容を追加していたため、マージ後にファイル内に2回定義されていた) | 気づいて手動で修正。2つの定義は一字一句同じロジック(docstringの文言のみ、「Ported from...」と「NEW (not ported)」で異なる)だったため、後者(オリジナル側、`claude/markov-production-analysis`で最初に追加されたもの)を残し、前者(`claude/k-model-markov-probe`側の移植コピー)を削除して重複を解消した。関数の中身・動作は変えていない。 |
+
+`docs/PREREGISTRATION_*`・`docs/DEVIATION_*`の文書は、この2つのマージのどちらでも
+**衝突しなかった**(両ブランチに同名ファイルの重複がなかったため)。したがって
+「衝突したらそのブランチの版をそのまま採用する」というルールを適用する場面
+自体がなく、両文書とも一字も変更していない。
+
+マージコミット後、全repoを対象に`grep`で関数・クラス定義の重複を再チェックし、
+上記以外に重複が無いことを確認した。
+
+### 9-4. README.mdのZenodo欄
+
+安念の指示により、`README.md`の該当行を次のように書き換えた
+(番号はまだ不明なのでTODOのまま):
+
+```
+- データ・コードのアーカイブ(Zenodo DOI): 10.5281/zenodo.TODO <!-- TODO: 登録後に正式な番号に差し替え -->
+```
+
+### 9-5. 引用コミット8つの祖先確認
+
+`git merge-base --is-ancestor <hash> main`で、マージ後のmainに対して全て確認した:
+
+| コミット | 結果 |
+|---|---|
+| `ccc0b1b` | ○ mainの祖先 |
+| `3fe01f7` | ○ mainの祖先 |
+| `82203334` | ○ mainの祖先 |
+| `955a1c9` | ○ mainの祖先 |
+| `6f4ab3dc` | ○ mainの祖先 |
+| `f67c207` | ○ mainの祖先 |
+| `092ff792` | ○ mainの祖先 |
+| `a4457747` | ○ mainの祖先 |
+
+**8つ全て確認済み。**
+
+### 9-6. テスト結果
+
+```
+554 passed in 23.08s
+```
+
+マージ後のmainで全テストが通過した。
+
+### 9-7. push
+
+上記9-1〜9-6が全て完了した後に、`main`をpushする(force pushではなく、
+通常のfast-forward push——`origin/main`からの分岐がないため)。
+
+---
+
+## 10. 公開(Public化)・GitHub Release・Zenodo連携の手順(安念が手で実行する)
+
+以下は手順の案のみ。実行は安念が行う。
+
+1. **Zenodo側でGitHub連携を先にONにする**(これが一番重要:GitHub Releaseを
+   作ってからZenodo連携をONにしても、その回のReleaseはアーカイブされない):
+   - https://zenodo.org にGitHubアカウントでログイン。
+   - https://zenodo.org/account/settings/github/ を開き、
+     `dpforest610/EvoPersonality_ABM`を探してトグルをONにする
+     (リポジトリをPublicにした後でないと一覧に出ない場合がある——その場合は
+     先に手順2でPublicにしてから戻ってくる)。
+2. **リポジトリをPublicにする**: GitHubの当該リポジトリ →
+   Settings → General → 一番下のDanger Zone →
+   "Change repository visibility" → Public。
+3. **バージョンタグを作る**(例:`v1.0.0`、`main`の最新コミットに対して)。
+4. **GitHub Releaseを作る**: Releases → "Draft a new release" →
+   手順3のタグを選択 → 本文に論文・プレプリントへの案内を書いて公開。
+   これでZenodoがWebhookを受け取り、自動でスナップショットを作成しDOIを発行する
+   (このリポジトリ直下の`.zenodo.json`のメタデータが使われる)。
+5. 発行されたDOIを確認し、`README.md`の
+   `10.5281/zenodo.TODO`と`CITATION.cff`の`doi`欄(コメントアウトを外す)を
+   実際の番号に書き換えてpushする。
+6. `CITATION.cff`の`version`・`date-released`・`preferred-citation`欄
+   (論文の出版先・DOIが決まったもの)も、判明した時点で更新する。
