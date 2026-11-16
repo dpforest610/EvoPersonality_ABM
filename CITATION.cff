@@ -18,6 +18,15 @@ license: MIT
 version: "0.1.0"  # TODO: update to the actual release tag
 date-released: "2026-11-16"  # TODO: update to the actual release date
 # doi: "10.5281/zenodo.TODO"  # TODO: uncomment and fill in once archived on Zenodo
+references:
+  - type: data
+    title: "Preregistration: K-model Markov-structure confirmatory analysis"
+    authors:
+      - family-names: Annen
+        given-names: Yasumasa
+        affiliation: Sapporo University of Health Sciences
+    doi: "10.5281/zenodo.24271141"
+    notes: "Preregistration document in this repository: docs/PREREGISTRATION_k_model_markov.md"
 preferred-citation:
   type: conference-paper  # TODO: change to `article` once journal details are known
   title: "TODO: paper/talk title (HBES2026)"

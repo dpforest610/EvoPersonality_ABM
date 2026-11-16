@@ -23,6 +23,7 @@
 - 論文: <!-- TODO: 投稿誌・DOIが決まり次第記入 -->
 - プレプリント: <!-- TODO: PsyArXiv等のURLを決まり次第記入 -->
 - 事前登録(Kモデル・Markov構造の確証的分析): `docs/PREREGISTRATION_k_model_markov.md`
+  (Zenodo DOI: [10.5281/zenodo.24271141](https://doi.org/10.5281/zenodo.24271141))
 - データ・コードのアーカイブ(Zenodo DOI): 10.5281/zenodo.TODO <!-- TODO: 登録後に正式な番号に差し替え -->
 
 ## 再現方法

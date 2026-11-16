@@ -25,6 +25,10 @@
       "identifier": "TODO: paper/preprint DOI, once assigned",
       "relation": "isSupplementTo",
       "resource_type": "publication-article"
+    },
+    {
+      "identifier": "10.5281/zenodo.24271141",
+      "relation": "references"
     }
   ],
   "notes": "TODO before archiving on Zenodo: fill in related_identifiers.identifier with the real paper/preprint DOI, and remove this notes field."
