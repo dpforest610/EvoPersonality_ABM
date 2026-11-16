@@ -17,8 +17,10 @@
 - **`main`の内容について**: 安念の判断(案A)により、`claude/markov-production-analysis`と
   `claude/public-release-prep`(`claude/k-model-markov-probe`+公開用の下書き)を
   `--no-ff`でmainにマージ**済み**(force pushなし)。§9に作業記録。
-- 不要なブランチ8本の削除は、安念がタグのpushを確認してから別途実行する(§5・§9)。
-  **まだ削除していない。**
+- **不要なブランチ8本の削除について**: 安念がタグ2本のGitHub上への反映を確認した後、
+  削除を試みたが、**このセッションの権限では削除がHTTP 403で拒否され、1本も削除
+  できていない**(タグのpushと同じ制限)。削除前後の到達可能性の確認結果と、
+  安念のMac/GitHub上で削除するための具体的な手順は§11。
 - 公開(Public化)とZenodo連携の手順案は§10。
 
 ---
@@ -387,3 +389,93 @@ claude/markov-production-analysis claude/k-model-markov-probe`で取得してか
    実際の番号に書き換えてpushする。
 6. `CITATION.cff`の`version`・`date-released`・`preferred-citation`欄
    (論文の出版先・DOIが決まったもの)も、判明した時点で更新する。
+
+---
+
+## 11. 不要なブランチ8本の削除(安念の確認後に着手、ただし削除は未完了)
+
+### 11-1. タグのGitHub反映確認
+
+安念がMacから2本のタグをpushし、GitHub上で以下の通り確認された:
+
+| タグ | 指しているコミット |
+|---|---|
+| `snapshot/markov-production-analysis-20261116` | `6c43beb24762f82e44b9c147c50569d89270f2c7` |
+| `snapshot/k-model-markov-probe-20261116` | `48536964d8a5431a630ab8f9fcc2be256cbb569c` |
+
+このセッション側でも`git fetch origin --tags`で同じ内容を確認した
+(軽量タグ。§9で作成した注釈付きタグとはタグオブジェクト自体は別物になるが、
+指しているコミットが一致していれば十分なので、作り直していない)。
+
+### 11-2. 削除前の到達可能性の確認
+
+引用している8コミットそれぞれについて、`origin/main`と2本のタグそれぞれから
+`git merge-base --is-ancestor`で確認した:
+
+| コミット | `origin/main`の祖先か | `snapshot/markov-production-analysis-20261116`の祖先か | `snapshot/k-model-markov-probe-20261116`の祖先か |
+|---|---|---|---|
+| `ccc0b1b` | ○ | ○ | - |
+| `3fe01f7` | ○ | ○ | - |
+| `82203334` | ○ | - | ○ |
+| `955a1c9` | ○ | - | ○ |
+| `6f4ab3dc` | ○ | ○ | - |
+| `f67c207` | ○ | ○ | - |
+| `092ff792` | ○ | - | ○ |
+| `a4457747` | ○ | - | ○ |
+
+**8つ全てが`origin/main`の祖先であり、かつ少なくとも一方のタグの祖先でもある**
+(main・タグの二重の経路で到達可能)。あわせて、2本のタグが指すコミット自体も
+`origin/main`の祖先であることを確認した。削除対象の8ブランチを消しても、
+mainとタグのどちらか一方さえ残っていれば、この8コミット全てに到達できる。
+
+### 11-3. 削除の実行 ―― このセッションの権限ではできなかった
+
+安念の指示通り、まず以下の7本から削除を試みた(`claude/lindgren-population-evolution-08fat1`
+は指示通り最後に回す予定だった):
+
+- `claude/inspiring-allen-ja4ele`
+- `claude/evolutionary-personality-abm-tyh46w`
+- `claude/lindgren-memory-genome-afuv7x`
+- `claude/memory-depth-duplication-uhwz4c`
+- `checkpoint-scratch`
+- `checkpoint-scratch-scent-spatial`
+- `checkpoint-scratch-scent-spatial-n1000`
+
+`git push origin --delete <branch>`をそれぞれに対して実行したが、**7本とも
+HTTP 403で拒否された**(タグのpushを拒否されたのと同じ、このセッションの
+git認証の権限の問題)。GitHub用のMCPツールにもブランチ削除に相当するツールは
+なかった。README(`/root/.ccr/README.md`)の指示(「403/407はリトライしたり
+回避したりせず、報告する」)に従い、再試行や別経路での削除は試みていない。
+
+削除を試みた後、`git ls-remote --heads origin`で7本とも**無傷でそのまま
+残っている**ことを確認した。**この時点で、8本のブランチは1本も削除されて
+いない。**
+
+### 11-4. 安念のMac/GitHub側で削除する手順
+
+以下を安念のMacから(このリポジトリのクローン内で)実行するか、GitHubの
+Webで該当ブランチのゴミ箱アイコンから削除してください。**指示通り、
+`claude/lindgren-population-evolution-08fat1`は最後に。**
+
+```bash
+git push origin --delete claude/inspiring-allen-ja4ele
+git push origin --delete claude/evolutionary-personality-abm-tyh46w
+git push origin --delete claude/lindgren-memory-genome-afuv7x
+git push origin --delete claude/memory-depth-duplication-uhwz4c
+git push origin --delete checkpoint-scratch
+git push origin --delete checkpoint-scratch-scent-spatial
+git push origin --delete checkpoint-scratch-scent-spatial-n1000
+# ここまで確認してから最後に:
+git push origin --delete claude/lindgren-population-evolution-08fat1
+```
+
+削除後、§11-2の表と同じ確認(8コミット全てが`main`・タグいずれかの祖先であること)
+を再度行うことを勧める——このセッションでも、削除完了の報告を受けてから
+改めて`git fetch --prune`の上で確認し、この文書に追記する。
+
+### 11-5. 補足
+
+`claude/lindgren-population-evolution-08fat1`というブランチ名は、このClaude
+Codeセッションのこのリポジトリでの既定の作業ブランチ名としても設定されている
+(§5の補足で既出)。削除後、以後のセッションでこの名前が既定として指定され
+続ける場合、新規作成扱いになる(内容が空の状態から始まる)点に留意してください。
