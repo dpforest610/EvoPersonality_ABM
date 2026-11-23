@@ -26,6 +26,13 @@
   (Zenodo DOI: [10.5281/zenodo.24271141](https://doi.org/10.5281/zenodo.24271141))
 - データ・コードのアーカイブ(Zenodo DOI): 10.5281/zenodo.TODO <!-- TODO: 登録後に正式な番号に差し替え -->
 
+## 発表資料
+
+- 学会発表スライド(HBES-J 2026、O-08): [`docs/HBES-J2026_slides.pdf`](docs/HBES-J2026_slides.pdf)
+- Markov構造のインタラクティブ・ビューア(Jaccard閾値・世代のスライダーで、
+  網が時点ごとに変化する様子を見られる): [k_model_network_viewer.html](https://htmlpreview.github.io/?https://github.com/dpforest610/EvoPersonality_ABM/blob/main/scripts/output/figures/k_model_network_viewer.html)
+  <!-- このリンクはリポジトリがPublicになってから有効になります(htmlpreview.github.ioはPublicリポジトリのみ表示可能)。 -->
+
 ## 再現方法
 
 ### 必要環境
