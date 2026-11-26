@@ -3,14 +3,18 @@
 人と同じ人数の群を「別々の系統から1体ずつ」抽出して、Jaccard の網を --n-draws 回の平均で作る。
 個体の選び方は頻度に比例（重みつきリザーバ抽出で、系統×類型×深さ×相手ごとに最大 R 本の系列を保持）。
 出力：k_depth_edges.json / k_depth_nodes.json / k_depth_group_size.csv（集計値のみ）。
-リポジトリの直下（EvoPersonality_ABM）で実行すること。
+
+リポジトリの直下（EvoPersonality_ABM）で実行すること:
+    venv/bin/python scripts/exploratory_hbes2026/k_depth_viewer_all.py [--data-dir ...] [--thresholds-json ...] --out-dir ...
+--data-dir・--thresholds-json は省略時、本番と同じ場所(scripts/output/coupling_markov_production、
+その analysis/type_thresholds.json)を使う。
 """
 import argparse, csv, gzip, heapq, json, random, sys, time
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
-REPO = Path.cwd()
+REPO = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(REPO))
 from evopersonality_abm.k_model_cross_lineage import load_series_first_rounds  # noqa: E402
 from evopersonality_abm.lindgren import LindgrenTable, effective_memory_depth  # noqa: E402
@@ -57,7 +61,8 @@ def one_file(data_dir, seed, age, tko, tks, R, depth_cap):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data-dir", required=True); ap.add_argument("--thresholds-json", required=True)
+    ap.add_argument("--data-dir", default="scripts/output/coupling_markov_production")
+    ap.add_argument("--thresholds-json", default="scripts/output/coupling_markov_production/analysis/type_thresholds.json")
     ap.add_argument("--age-start", type=int, default=1000); ap.add_argument("--age-end", type=int, default=5000)
     ap.add_argument("--age-step", type=int, default=100); ap.add_argument("--workers", type=int, default=5)
     ap.add_argument("--reservoir", type=int, default=40); ap.add_argument("--depth-cap", type=int, default=7)

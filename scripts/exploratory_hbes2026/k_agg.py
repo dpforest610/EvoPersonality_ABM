@@ -1,6 +1,11 @@
 """Kモデルの対戦記録（moves）から、人のデータと同じ3つの指標を類型×相手で集計する。
   協力率 / 入口（底の直後に協力）/ 到達（最初の底のあと和和和）
 最初の20回だけを使う（人の実験と同じ）。出力は集計値のCSVだけ。
+
+リポジトリの直下（EvoPersonality_ABM）で実行すること:
+    venv/bin/python scripts/exploratory_hbes2026/k_agg.py [--data-dir ...] [--thresholds-json ...]
+--data-dir・--thresholds-json は省略時、本番と同じ場所(scripts/output/coupling_markov_production、
+その analysis/type_thresholds.json)を使う。
 """
 import argparse, csv, gzip, json, random
 from collections import defaultdict
@@ -67,8 +72,8 @@ def one_file(data_dir, seed, age, tko, tks):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data-dir", required=True)
-    ap.add_argument("--thresholds-json", required=True)
+    ap.add_argument("--data-dir", default="scripts/output/coupling_markov_production")
+    ap.add_argument("--thresholds-json", default="scripts/output/coupling_markov_production/analysis/type_thresholds.json")
     ap.add_argument("--age-start", type=int, default=1000)
     ap.add_argument("--age-end", type=int, default=5000)
     ap.add_argument("--age-step", type=int, default=50)

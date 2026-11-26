@@ -1,4 +1,10 @@
-"""Kモデルの対戦記録から、人と同じ「交代」の分析をする（集計値だけを出力）。"""
+"""Kモデルの対戦記録から、人と同じ「交代」の分析をする（集計値だけを出力）。
+
+リポジトリの直下（EvoPersonality_ABM）で実行すること:
+    venv/bin/python scripts/exploratory_hbes2026/k_alt.py [--data-dir ...] [--thresholds-json ...]
+--data-dir・--thresholds-json は省略時、本番と同じ場所(scripts/output/coupling_markov_production、
+その analysis/type_thresholds.json)を使う。
+"""
 import argparse, csv, gzip, json, random, math
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -94,7 +100,8 @@ def one_file(data_dir, seed, age, tko, tks):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--data-dir", required=True); ap.add_argument("--thresholds-json", required=True)
+    ap.add_argument("--data-dir", default="scripts/output/coupling_markov_production")
+    ap.add_argument("--thresholds-json", default="scripts/output/coupling_markov_production/analysis/type_thresholds.json")
     ap.add_argument("--age-start", type=int, default=1000); ap.add_argument("--age-end", type=int, default=5000)
     ap.add_argument("--age-step", type=int, default=50); ap.add_argument("--workers", type=int, default=5)
     ap.add_argument("--n-boot", type=int, default=2000); ap.add_argument("--out-prefix", default="k_alt")

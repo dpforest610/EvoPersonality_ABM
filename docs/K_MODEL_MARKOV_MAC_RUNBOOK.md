@@ -672,3 +672,44 @@ git add scripts/output/figures/k_model_density_heatmap.png scripts/output/figure
 git commit -m "K-model: density heatmap boundary handling, mode/median, marginals, population snapshot"
 git push
 ```
+
+## 15. HBES2026前の探索的分析(3指標・交代と報復・記憶の深さ別の網、事前登録外)
+
+詳細は`docs/EXPLORATORY_HBES2026_TRANSITIONS.md`を参照。3つのスクリプトとも
+リポジトリの直下(`EvoPersonality_ABM`)で実行する。`--data-dir`・
+`--thresholds-json`は省略時、本番の既定(`scripts/output/coupling_markov_production`・
+その`analysis/type_thresholds.json`)を使う。いずれも`--workers 5`で
+所要時間はおおよそ: `k_agg.py`約50分、`k_alt.py`約1時間、
+`k_depth_viewer_all.py`約40分。
+
+```bash
+# 協力率・入口・到達(約50分)
+venv/bin/python scripts/exploratory_hbes2026/k_agg.py \
+  --age-start 1000 --age-end 5000 --age-step 50 \
+  --workers 5 --n-boot 2000 \
+  --out docs/exploratory_hbes2026_results/k_by_type_opponent.csv
+```
+
+```bash
+# 交代・報復・回帰(約1時間)
+venv/bin/python scripts/exploratory_hbes2026/k_alt.py \
+  --age-start 1000 --age-end 5000 --age-step 50 \
+  --workers 5 --n-boot 2000 \
+  --out-prefix docs/exploratory_hbes2026_results/k_alt
+```
+
+```bash
+# 記憶の深さ別の網(約40分)
+venv/bin/python scripts/exploratory_hbes2026/k_depth_viewer_all.py \
+  --age-start 1000 --age-end 5000 --age-step 100 \
+  --workers 5 --reservoir 40 --depth-cap 7 --n-draws 100 --min-group 15 \
+  --out-dir docs/exploratory_hbes2026_results/k_depth_all
+```
+
+リポジトリに入れる(集計値のみ。生のcensus/movesは含めない):
+
+```bash
+git add docs/exploratory_hbes2026_results/
+git commit -m "HBES2026 exploratory transitions: aggregated results"
+git push
+```
